@@ -2,12 +2,14 @@
 name: paper-write
 description: "Draft LaTeX paper section by section from an outline. Use when user says \"写论文\", \"write paper\", \"draft LaTeX\", \"开始写\", or wants to generate LaTeX content from a paper plan."
 argument-hint: [venue-or-section]
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, WebSearch, WebFetch, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, WebSearch, WebFetch, mcp__codex__codex, mcp__codex__codex-reply, mcp__claude-review__review_start, mcp__claude-review__review_status
 ---
 
 # Paper Write: Section-by-Section LaTeX Generation
 
 Draft a LaTeX paper based on: **$ARGUMENTS**
+
+Standalone invocation also accepts `— reviewer: codex | claude` (default: reads `paper/.aris/reviewer.txt`, else `codex`).
 
 ## Constants
 
@@ -454,8 +456,14 @@ Passive voice IS acceptable for: established facts, methods where agent is irrel
 
 ### Step 6: Cross-Review with REVIEWER_MODEL
 
-Send the complete draft to GPT-5.4 xhigh:
+Read the active reviewer backend (set by `/paper-writing` Phase 0, or default `codex` when invoked standalone):
+```bash
+REVIEWER_BACKEND=$(cat paper/.aris/reviewer.txt 2>/dev/null || echo "codex")
+```
 
+Send the complete draft for review:
+
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex:
   model: gpt-5.4
@@ -477,6 +485,30 @@ mcp__codex__codex:
 
     [paste full draft text]
 ```
+
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_start:
+  prompt: |
+    Review this [VENUE] paper draft (main body, excluding appendix).
+
+    Focus on:
+    1. Does each claim from the intro have supporting evidence?
+    2. Is the writing clear, concise, and free of AI-isms?
+    3. Any logical gaps or unclear explanations?
+    4. Does it fit within [MAX_PAGES] pages (to end of Conclusion)?
+    5. Is related work sufficiently comprehensive (≥1 page)?
+    6. For theory papers: are proof sketches adequate?
+    7. Are figures/tables clearly described and properly referenced?
+    8. Would a skim reader understand the contribution from the title, abstract, introduction, and Figure 1?
+
+    For each issue, specify: severity (CRITICAL/MAJOR/MINOR), location, and fix.
+
+    [paste full draft text]
+```
+→ save the returned `jobId` immediately
+→ poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until `done=true`
+→ use the completed status payload's `response` as the reviewer output
 
 Apply CRITICAL and MAJOR fixes. Document MINOR issues for the user.
 

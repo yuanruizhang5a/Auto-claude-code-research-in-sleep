@@ -2,12 +2,14 @@
 name: paper-figure
 description: "Generate publication-quality figures and tables from experiment results. Use when user says \"画图\", \"作图\", \"generate figures\", \"paper figures\", or needs plots for a paper."
 argument-hint: [figure-plan-or-data-path]
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply, mcp__claude-review__review_start, mcp__claude-review__review_status
 ---
 
 # Paper Figure: Publication-Quality Plots from Experiment Data
 
 Generate all figures and tables for a paper based on: **$ARGUMENTS**
+
+Standalone invocation also accepts `— reviewer: codex | claude` (default: reads `paper/.aris/reviewer.txt`, else `codex`).
 
 ## Scope: What This Skill Can and Cannot Do
 
@@ -199,8 +201,14 @@ Save all snippets to `figures/latex_includes.tex` for easy copy-paste into the p
 
 ### Step 7: Figure Quality Review with REVIEWER_MODEL
 
-Send figure descriptions and captions to GPT-5.4 for review:
+Read the active reviewer backend (set by `/paper-writing` Phase 0, or default `codex` when invoked standalone):
+```bash
+REVIEWER_BACKEND=$(cat paper/.aris/reviewer.txt 2>/dev/null || echo "codex")
+```
 
+Send figure descriptions and captions for review:
+
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex:
   model: gpt-5.4
@@ -217,6 +225,25 @@ mcp__codex__codex:
 
     [list all figures with captions and descriptions]
 ```
+
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_start:
+  prompt: |
+    Review these figure/table plans for a [VENUE] submission.
+
+    For each figure:
+    1. Is the caption informative and self-contained?
+    2. Does the figure type match the data being shown?
+    3. Is the comparison fair and clear?
+    4. Any missing baselines or ablations?
+    5. Would a different visualization be more effective?
+
+    [list all figures with captions and descriptions]
+```
+→ save the returned `jobId` immediately
+→ poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until `done=true`
+→ use the completed status payload's `response` as the reviewer output
 
 ### Step 8: Quality Checklist
 

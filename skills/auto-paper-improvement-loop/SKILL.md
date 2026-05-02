@@ -2,12 +2,14 @@
 name: auto-paper-improvement-loop
 description: "Autonomously improve a generated paper via GPT-5.4 xhigh review → implement fixes → recompile, for 2 rounds. Use when user says \"改论文\", \"improve paper\", \"论文润色循环\", \"auto improve\", or wants to iteratively polish a generated paper."
 argument-hint: [paper-directory]
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, mcp__codex__codex, mcp__codex__codex-reply, mcp__claude-review__review_start, mcp__claude-review__review_status
 ---
 
 # Auto Paper Improvement Loop: Review → Fix → Recompile
 
 Autonomously improve the paper at: **$ARGUMENTS**
+
+Standalone invocation also accepts `— reviewer: codex | claude` (default: reads `paper/.aris/reviewer.txt`, else `codex`).
 
 ## Context
 
@@ -82,10 +84,16 @@ for f in paper/sections/*.tex; do
 done > /tmp/paper_full_text.txt
 ```
 
+Read the active reviewer backend (written by `/paper-writing` Phase 0; defaults to `codex` when this skill is invoked standalone):
+```bash
+REVIEWER_BACKEND=$(cat paper/.aris/reviewer.txt 2>/dev/null || echo "codex")
+```
+
 ### Step 2: Round 1 Review
 
-Send the full paper text AND compiled PDF to GPT-5.4 xhigh:
+Send the full paper text AND compiled PDF to the external reviewer.
 
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex:
   model: gpt-5.4
@@ -119,8 +127,43 @@ mcp__codex__codex:
     Focus on: theoretical rigor, claims vs evidence alignment, writing clarity,
     self-containedness, notation consistency, AND visual presentation quality.
 ```
+Save the returned threadId for Round 2 recovery bookkeeping.
 
-Save the threadId for Round 2.
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_start:
+  prompt: |
+    You are reviewing a [VENUE] paper. Please provide a detailed, structured review.
+
+    ## Paper Files:
+    - LaTeX source: [list all section .tex files]
+    - Compiled PDF: paper/main.pdf
+    - Figures: [list figure files]
+
+    Read BOTH the LaTeX source (for content/logic) AND the compiled PDF (for visual presentation).
+
+    ## Review Instructions
+    Please act as a senior ML reviewer ([VENUE] level). Provide:
+    1. **Overall Score** (1-10, where 6 = weak accept, 7 = accept)
+    2. **Summary** (2-3 sentences)
+    3. **Strengths** (bullet list, ranked)
+    4. **Weaknesses** (bullet list, ranked: CRITICAL > MAJOR > MINOR)
+    5. **For each CRITICAL/MAJOR weakness**: A specific, actionable fix
+    6. **Missing References** (if any)
+    7. **Visual Review** (from the PDF):
+       - Figure quality: readable? labels legible? colors distinguishable in grayscale?
+       - Figure-caption alignment: does each caption match its figure?
+       - Layout: orphaned headers, awkward page breaks, figures far from references?
+       - Table formatting: aligned columns, consistent decimals, bold for best results?
+       - Visual consistency: same color scheme across all figures?
+    8. **Verdict**: Ready for submission? Yes / Almost / No
+
+    Focus on: theoretical rigor, claims vs evidence alignment, writing clarity,
+    self-containedness, notation consistency, AND visual presentation quality.
+```
+→ save the returned `jobId` immediately
+→ poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until `done=true`
+→ save the completed status payload's `response` as reviewer output and `threadId` for recovery bookkeeping
 
 ### Step 2b: Human Checkpoint (if enabled)
 
@@ -211,8 +254,9 @@ PY
 
 ### Step 5: Round 2 Review
 
-If `REVIEWER_BIAS_GUARD = true` (default), use a **fresh** `mcp__codex__codex` thread for Round 2. Do not reuse the Round 1 threadId for prompting. Save the returned threadId only for recovery bookkeeping.
+Every round must use a fresh reviewer thread — `REVIEWER_BIAS_GUARD = true` (default). The Round 1 threadId must not be reused for prompting (recovery bookkeeping only).
 
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex:
   model: gpt-5.4
@@ -248,8 +292,45 @@ mcp__codex__codex:
     Focus on: theoretical rigor, claims vs evidence alignment, writing clarity,
     self-containedness, notation consistency, and visual presentation quality.
 ```
-
 If `REVIEWER_BIAS_GUARD = false` (legacy debugging only), use `mcp__codex__codex-reply` with the saved threadId; this is **not** the recommended path.
+
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_start:
+  prompt: |
+    You are reviewing a [VENUE] paper. This is a fresh, zero-context review.
+    Ignore any prior review rounds, prior fix lists, or executor explanations.
+    Judge the paper only from the current LaTeX source and compiled PDF.
+
+    ## Paper Files:
+    - LaTeX source: [list all section .tex files]
+    - Compiled PDF: paper/main.pdf
+    - Figures: [list figure files]
+
+    Read BOTH the LaTeX source (for content/logic) AND the compiled PDF (for visual presentation).
+
+    ## Review Instructions
+    Please act as a senior ML reviewer ([VENUE] level). Provide:
+    1. **Overall Score** (1-10, where 6 = weak accept, 7 = accept)
+    2. **Summary** (2-3 sentences)
+    3. **Strengths** (bullet list, ranked)
+    4. **Weaknesses** (bullet list, ranked: CRITICAL > MAJOR > MINOR)
+    5. **For each CRITICAL/MAJOR weakness**: A specific, actionable fix
+    6. **Missing References** (if any)
+    7. **Visual Review** (from the PDF):
+       - Figure quality: readable? labels legible? colors distinguishable in grayscale?
+       - Figure-caption alignment: does each caption match its figure?
+       - Layout: orphaned headers, awkward page breaks, figures far from references?
+       - Table formatting: aligned columns, consistent decimals, bold for best results?
+       - Visual consistency: same color scheme across all figures?
+    8. **Verdict**: Ready for submission? Yes / Almost / No
+
+    Focus on: theoretical rigor, claims vs evidence alignment, writing clarity,
+    self-containedness, notation consistency, and visual presentation quality.
+```
+→ save the returned `jobId` immediately (fresh thread — do NOT reuse Round 1 jobId)
+→ poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until `done=true`
+→ use the completed status payload's `response` as the reviewer output
 
 ### Step 5.5: Kill Argument Exercise (theory papers only)
 

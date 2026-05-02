@@ -2,9 +2,9 @@
 
 This package is a **thin override layer** for users who want:
 
-- **Codex** as the main executor
-- **Claude Code** as the reviewer
-- the local `claude-review` MCP bridge instead of a second Codex reviewer
+- **Any non-Claude executor** (Codex CLI, Opencode, Cursor, Trae, Windsurf, etc.) as the main executor
+- **Claude Code** (via the local `claude-review` MCP bridge) as the reviewer
+- a different model family for reviewer vs executor, satisfying the ARIS cross-model independence protocol
 
 It is designed to sit on top of the upstream Codex-native package at `skills/skills-codex/`.
 
@@ -26,6 +26,8 @@ Current overrides:
 - `auto-paper-improvement-loop`
 
 ## Install
+
+### For Codex CLI users
 
 1. Install the base Codex-native skills first:
 
@@ -56,14 +58,32 @@ chmod +x ~/.codex/mcp-servers/claude-review/run_with_claude_aws.sh
 codex mcp add claude-review -- ~/.codex/mcp-servers/claude-review/run_with_claude_aws.sh
 ```
 
+### For Opencode users
+
+1. Install the base ARIS skills into your project via `tools/install_aris.sh`:
+
+```bash
+bash tools/install_aris.sh <your-project-path>
+```
+
+2. Copy this overlay on top (shadows the Codex-default reviewer in affected skills):
+
+```bash
+cp -a skills/skills-codex-claude-review/* <your-project-path>/.claude/skills/
+```
+
+3. Register the `claude-review` MCP bridge in Opencode — see `mcp-servers/claude-review/README.md` for the full config block. Key points:
+   - The server **must** be registered under the name `claude-review` (skills reference `mcp__claude-review__*`)
+   - Set `CLAUDE_REVIEW_MODEL=claude-sonnet-4-6` in the environment block to pin the reviewer model
+
 ## Why this exists
 
 The upstream `skills/skills-codex/` path already supports Codex-native execution with a second Codex reviewer via `spawn_agent`.
 
 This package adds a different split:
 
-- executor: Codex
-- reviewer: Claude Code CLI
+- executor: any non-Claude client (Codex CLI, Opencode, Cursor, Trae, etc.)
+- reviewer: Claude Code CLI (Sonnet 4.6 or whichever model `CLAUDE_REVIEW_MODEL` specifies)
 - transport: `claude-review` MCP
 
 For long paper and review prompts, the reviewer path uses:

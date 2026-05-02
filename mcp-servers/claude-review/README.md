@@ -1,10 +1,10 @@
 # Claude Review MCP
 
-Bridge Codex-first ARIS workflows to the local Claude Code CLI.
+Bridge any ARIS-compatible executor (Codex CLI, Opencode, Cursor, Trae, etc.) to the local Claude Code CLI as an external reviewer.
 
 ## What it does
 
-- Keeps **Codex** as the executor
+- Keeps the executor (Codex CLI, Opencode, Cursor, Trae, etc.) fully separate from the reviewer
 - Uses **Claude Code CLI** as the external reviewer
 - Exposes synchronous MCP tools:
   - `review`
@@ -35,6 +35,38 @@ chmod +x ~/.codex/mcp-servers/claude-review/run_with_claude_aws.sh
 codex mcp add claude-review -- ~/.codex/mcp-servers/claude-review/run_with_claude_aws.sh
 ```
 
+## Install into Opencode
+
+Opencode reads its MCP configuration from `~/.opencode/config.json` (or the project-local `.opencode/config.json`). Add an entry for `claude-review`; **the key name must be `claude-review`** because ARIS skills reference `mcp__claude-review__*` tool names derived from this key.
+
+1. Copy the server to a stable path:
+
+```bash
+mkdir -p ~/.aris/mcp-servers/claude-review
+cp mcp-servers/claude-review/server.py ~/.aris/mcp-servers/claude-review/server.py
+```
+
+2. Add to `~/.opencode/config.json` (create the file if it does not exist):
+
+```json
+{
+  "mcp": {
+    "claude-review": {
+      "type": "local",
+      "command": ["python3", "/home/<you>/.aris/mcp-servers/claude-review/server.py"],
+      "environment": {
+        "CLAUDE_REVIEW_MODEL": "claude-sonnet-4-6",
+        "CLAUDE_REVIEW_TIMEOUT_SEC": "600"
+      }
+    }
+  }
+}
+```
+
+Replace `/home/<you>/` with your actual home directory path, or use `$HOME` if your shell expands it.
+
+> **Note for Codex users migrating to Opencode:** the default job state directory changed from `~/.codex/state/claude-review/` to `~/.aris/state/claude-review/` in this release. Existing in-flight job files are under the old path; set `CLAUDE_REVIEW_STATE_DIR=~/.codex/state/claude-review` in the environment block above to keep the old location.
+
 ## Environment Variables
 
 - `CLAUDE_BIN`: Claude CLI path, defaults to `claude`
@@ -48,7 +80,7 @@ codex mcp add claude-review -- ~/.codex/mcp-servers/claude-review/run_with_claud
 - The bridge runs Claude in non-interactive `-p` mode.
 - By default the reviewer gets **no tools**. This matches the original ARIS pattern where the external reviewer only sees the prompt context prepared by the executor.
 - `threadId` is the native Claude session id and can be passed directly to `review_reply`.
-- `jobId` is a bridge-local background task id stored on disk under `~/.codex/state/claude-review/jobs/` by default, so status can be resumed across MCP server restarts.
+- `jobId` is a bridge-local background task id stored on disk under `~/.aris/state/claude-review/jobs/` by default (override with `CLAUDE_REVIEW_STATE_DIR`), so status can be resumed across MCP server restarts.
 
 ## When to use sync vs async
 

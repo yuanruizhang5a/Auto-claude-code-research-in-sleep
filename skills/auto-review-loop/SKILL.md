@@ -2,7 +2,7 @@
 name: auto-review-loop
 description: Autonomous multi-round research review loop. Repeatedly reviews via Codex MCP, implements fixes, and re-reviews until positive assessment or max rounds reached. Use when user says "auto review loop", "review until it passes", or wants autonomous iterative improvement.
 argument-hint: [topic-or-scope]
-allowed-tools: Bash(*), Read, Grep, Glob, Write, Edit, Agent, Skill, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Grep, Glob, Write, Edit, Agent, Skill, mcp__codex__codex, mcp__codex__codex-reply, mcp__claude-review__review_start, mcp__claude-review__review_reply_start, mcp__claude-review__review_status
 ---
 
 # Auto Review Loop: Autonomous Research Improvement
@@ -17,7 +17,7 @@ Autonomously iterate: review → implement fixes → re-review, until the extern
 - POSITIVE_THRESHOLD: score >= 6/10, or verdict contains "accept", "sufficient", "ready for submission"
 - REVIEW_DOC: `review-stage/AUTO_REVIEW.md` (cumulative log) *(fall back to `./AUTO_REVIEW.md` for legacy projects)*
 - REVIEWER_MODEL = `gpt-5.4` — Model used via Codex MCP. Must be an OpenAI model (e.g., `gpt-5.4`, `o3`, `gpt-4o`)
-- **REVIEWER_BACKEND = `codex`** — Default: Codex MCP (xhigh). Override with `— reviewer: oracle-pro` for GPT-5.4 Pro via Oracle MCP. See `shared-references/reviewer-routing.md`.
+- **REVIEWER_BACKEND = `codex`** — Default: Codex MCP (xhigh). Options: `codex` (default), `claude` (local claude-review MCP bridge → Claude Sonnet 4.6). Override: `— reviewer: claude`. Also supports `— reviewer: oracle-pro` for GPT-5.4 Pro via Oracle MCP. See `shared-references/reviewer-routing.md`.
 - **OUTPUT_DIR = `review-stage/`** — All review-stage outputs go here. Create the directory if it doesn't exist.
 - **HUMAN_CHECKPOINT = false** — When `true`, pause after each round's review (Phase B) and present the score + weaknesses to the user. Wait for user input before proceeding to Phase C. The user can: approve the suggested fixes, provide custom modification instructions, skip specific fixes, or stop the loop early. When `false` (default), the loop runs fully autonomously.
 - **COMPACT = false** — When `true`, (1) read `EXPERIMENT_LOG.md` and `findings.md` instead of parsing full logs on session recovery, (2) append key findings to `findings.md` after each round.
@@ -26,7 +26,7 @@ Autonomously iterate: review → implement fixes → re-review, until the extern
   - `hard`: Adds **Reviewer Memory** (GPT tracks its own suspicions across rounds) + **Debate Protocol** (Claude can rebut, GPT rules).
   - `nightmare`: Everything in `hard` + **GPT reads the repo directly** via `codex exec` (Claude cannot filter what GPT sees) + **Adversarial Verification** (GPT independently checks if code matches claims).
 
-> 💡 Override: `/auto-review-loop "topic" — compact: true, human checkpoint: true, difficulty: hard`
+> 💡 Override: `/auto-review-loop "topic" — compact: true, human checkpoint: true, difficulty: hard, reviewer: claude`
 
 ## State Persistence (Compact Recovery)
 
@@ -60,6 +60,11 @@ Long-running loops may hit the context window limit, triggering automatic compac
 
 ### Initialization
 
+0. **Resolve reviewer backend** (before reading state or any other step):
+   - If `— reviewer: claude` in `$ARGUMENTS` → `REVIEWER_BACKEND = claude`; write `review-stage/reviewer.txt` with value `claude`
+   - Else if `review-stage/reviewer.txt` exists → read and use that value (survives context compaction)
+   - Else → `REVIEWER_BACKEND = codex` (default; write `review-stage/reviewer.txt` with value `codex`)
+
 1. **Check for `review-stage/REVIEW_STATE.json`** *(fall back to `./REVIEW_STATE.json` if not found — legacy path)*:
    - If neither path exists: **fresh start** (normal case, identical to behavior before this feature existed)
    - If it exists AND `status` is `"completed"`: **fresh start** (previous loop finished normally)
@@ -84,8 +89,9 @@ Long-running loops may hit the context window limit, triggering automatic compac
 
 ##### Medium (default) — MCP Review
 
-Send comprehensive context to the external reviewer:
+Send comprehensive context to the external reviewer.
 
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex:
   config: {"model_reasoning_effort": "xhigh"}
@@ -104,13 +110,36 @@ mcp__codex__codex:
 
     Be brutally honest. If the work is ready, say so clearly.
 ```
+Round 2+: use `mcp__codex__codex-reply` with the saved threadId to maintain conversation context.
 
-If this is round 2+, use `mcp__codex__codex-reply` with the saved threadId to maintain conversation context.
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_start:
+  prompt: |
+    [Round N/MAX_ROUNDS of autonomous review loop]
+
+    [Full research context: claims, methods, results, known weaknesses]
+    [Changes since last round, if any]
+
+    Please act as a senior ML reviewer (NeurIPS/ICML level).
+
+    1. Score this work 1-10 for a top venue
+    2. List remaining critical weaknesses (ranked by severity)
+    3. For each weakness, specify the MINIMUM fix (experiment, analysis, or reframing)
+    4. State clearly: is this READY for submission? Yes/No/Almost
+
+    Be brutally honest. If the work is ready, say so clearly.
+```
+→ save the returned `jobId` immediately
+→ poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until `done=true`
+→ extract `response` and `threadId` from the completed status payload
+Round 2+: use `mcp__claude-review__review_reply_start(threadId, prompt)` → poll `mcp__claude-review__review_status` until done
 
 ##### Hard — MCP Review + Reviewer Memory
 
-Same as medium, but **prepend Reviewer Memory** to the prompt:
+Same as medium, but **prepend Reviewer Memory** to the prompt.
 
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex:
   config: {"model_reasoning_effort": "xhigh"}
@@ -137,6 +166,36 @@ mcp__codex__codex:
 
     Be brutally honest. Actively look for things the author might be hiding.
 ```
+Round 2+: use `mcp__codex__codex-reply` with the saved threadId.
+
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_start:
+  prompt: |
+    [Round N/MAX_ROUNDS of autonomous review loop]
+
+    ## Your Reviewer Memory (persistent across rounds)
+    [Paste full contents of REVIEWER_MEMORY.md here]
+
+    IMPORTANT: You have memory from prior rounds. Check whether your
+    previous suspicions were genuinely addressed or merely sidestepped.
+
+    [Full research context, changes since last round...]
+
+    Please act as a senior ML reviewer (NeurIPS/ICML level).
+    1. Score this work 1-10 for a top venue
+    2. List remaining critical weaknesses (ranked by severity)
+    3. For each weakness, specify the MINIMUM fix
+    4. State clearly: is this READY for submission? Yes/No/Almost
+    5. **Memory update**: List any new suspicions, unresolved concerns,
+       or patterns you want to track in future rounds.
+
+    Be brutally honest. Actively look for things the author might be hiding.
+```
+→ save the returned `jobId` immediately
+→ poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until `done=true`
+→ extract `response` and `threadId`
+Round 2+: use `mcp__claude-review__review_reply_start(threadId, prompt)` → poll until done
 
 ##### Nightmare — Codex Exec (GPT reads repo directly)
 
@@ -240,7 +299,7 @@ Rules for Claude's rebuttal:
 
 Send Claude's rebuttal back to GPT for a ruling:
 
-*Hard mode (MCP):*
+*Hard mode (MCP) — If REVIEWER_BACKEND = codex:*
 ```
 mcp__codex__codex-reply:
   threadId: [saved]
@@ -257,6 +316,24 @@ mcp__codex__codex-reply:
 
     Then update your score if any weaknesses were withdrawn.
 ```
+
+*Hard mode (MCP) — If REVIEWER_BACKEND = claude:*
+```
+mcp__claude-review__review_reply_start:
+  threadId: [saved from Phase A]
+  prompt: |
+    The author rebuts your review:
+
+    [paste Claude's rebuttal]
+
+    For each rebuttal, rule:
+    - SUSTAINED (author's argument is valid, withdraw this weakness)
+    - OVERRULED (your original criticism stands, explain why)
+    - PARTIALLY SUSTAINED (revise the weakness to a narrower scope)
+
+    Then update your score if any weaknesses were withdrawn.
+```
+→ save the returned `jobId` → poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until done
 
 *Nightmare mode (codex exec):*
 ```bash
@@ -437,6 +514,7 @@ When loop ends (positive assessment or max rounds):
 
 ## Prompt Template for Round 2+
 
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex-reply:
   threadId: [saved from round 1]
@@ -455,6 +533,27 @@ mcp__codex__codex-reply:
     Please re-score and re-assess. Are the remaining concerns addressed?
     Same format: Score, Verdict, Remaining Weaknesses, Minimum Fixes.
 ```
+
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_reply_start:
+  threadId: [saved from round 1]
+  prompt: |
+    [Round N update]
+
+    Since your last review, we have:
+    1. [Action 1]: [result]
+    2. [Action 2]: [result]
+    3. [Action 3]: [result]
+
+    Updated results table:
+    [paste metrics]
+
+    Please re-score and re-assess. Are the remaining concerns addressed?
+    Same format: Score, Verdict, Remaining Weaknesses, Minimum Fixes.
+```
+→ save the returned `jobId` → poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until done
+→ extract `response` and updated `threadId` from completed payload
 
 ## Review Tracing
 

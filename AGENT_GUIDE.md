@@ -100,6 +100,7 @@ Skills communicate through plain-text files:
 - **Executor** (Claude/Codex): writes code, runs experiments, drafts papers
 - **Reviewer** (GPT-5.4/Gemini/GLM): critiques, scores, demands revisions
 - **Rule**: executor and reviewer must be different model families
+- **Reviewer override**: default is `mcp__codex__codex` xhigh; pass `— reviewer: claude` to use local Claude Code CLI (via `claude-review` MCP) or `— reviewer: oracle-pro` for GPT-5.4 Pro
 - **Reviewer independence**: pass file paths only, never summaries or interpretations
 - **Experiment integrity**: executor must NOT judge its own eval code — reviewer audits directly
 

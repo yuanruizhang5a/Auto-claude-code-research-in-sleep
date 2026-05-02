@@ -2,9 +2,9 @@
 
 这是一个**薄覆盖层**，适用于想采用以下组合的用户：
 
-- **Codex** 作为主执行者
-- **Claude Code** 作为审稿人
-- 用本地 `claude-review` MCP bridge 替代“第二个 Codex reviewer”
+- **任意非 Claude 执行者**（Codex CLI、Opencode、Cursor、Trae、Windsurf 等）作为主执行者
+- **Claude Code**（通过本地 `claude-review` MCP bridge）作为审稿人
+- 满足 ARIS 跨模型独立性协议：执行者与审稿人属于不同模型家族
 
 它不是新造一套完整技能包，而是叠加在上游已有的 `skills/skills-codex/` 之上。
 
@@ -62,9 +62,11 @@ codex mcp add claude-review -- ~/.codex/mcp-servers/claude-review/run_with_claud
 
 这个覆盖层新增的是另一种分工：
 
-- 执行者：Codex
-- 审稿人：Claude Code CLI
+- 执行者：任意非 Claude 客户端（Codex CLI、Opencode、Cursor、Trae 等）
+- 审稿人：Claude Code CLI（由 `CLAUDE_REVIEW_MODEL` 指定具体模型，如 `claude-sonnet-4-6`）
 - 传输层：`claude-review` MCP
+
+**Opencode 用户**请参阅 `mcp-servers/claude-review/README.md` 中的"Install into Opencode"章节，了解 MCP 注册配置格式。
 
 对于长论文和长 review prompt，这条 reviewer 路径会改用：
 

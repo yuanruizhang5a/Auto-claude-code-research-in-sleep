@@ -2,12 +2,14 @@
 name: paper-plan
 description: "Generate a structured paper outline from review conclusions and experiment results. Use when user says \"写大纲\", \"paper outline\", \"plan the paper\", \"论文规划\", or wants to create a paper plan before writing."
 argument-hint: [topic-or-narrative-doc]
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, WebSearch, WebFetch, mcp__codex__codex, mcp__codex__codex-reply
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, WebSearch, WebFetch, mcp__codex__codex, mcp__codex__codex-reply, mcp__claude-review__review_start, mcp__claude-review__review_status
 ---
 
 # Paper Plan: From Review Conclusions to Paper Outline
 
 Generate a structured, section-by-section paper outline from: **$ARGUMENTS**
+
+Standalone invocation also accepts `— reviewer: codex | claude` (default: reads `paper/.aris/reviewer.txt`, else `codex`).
 
 ## Constants
 
@@ -207,8 +209,14 @@ For each section, list required citations:
 
 ### Step 6: Cross-Review with REVIEWER_MODEL
 
-Send the complete outline to GPT-5.4 xhigh for feedback:
+Read the active reviewer backend (set by `/paper-writing` Phase 0, or default `codex` when this skill is invoked standalone):
+```bash
+REVIEWER_BACKEND=$(cat paper/.aris/reviewer.txt 2>/dev/null || echo "codex")
+```
 
+Send the complete outline for feedback:
+
+**If REVIEWER_BACKEND = codex:**
 ```
 mcp__codex__codex:
   model: gpt-5.4
@@ -228,6 +236,28 @@ mcp__codex__codex:
     For each weakness, suggest the MINIMUM fix.
     Be specific and actionable — "add X" not "consider more experiments".
 ```
+
+**If REVIEWER_BACKEND = claude:**
+```
+mcp__claude-review__review_start:
+  prompt: |
+    Review this paper outline for a [VENUE] submission.
+    [full outline including Claims-Evidence Matrix]
+
+    Score 1-10 on:
+    1. Logical flow — does the story build naturally?
+    2. Claim-evidence alignment — every claim backed?
+    3. Missing experiments or analysis
+    4. Positioning relative to prior work
+    5. Page budget feasibility (MAX_PAGES = main body to Conclusion end, excluding refs/appendix)
+    6. Front-matter strength — are the abstract, introduction, and hero figure plan strong enough for skim-reading reviewers?
+
+    For each weakness, suggest the MINIMUM fix.
+    Be specific and actionable — "add X" not "consider more experiments".
+```
+→ save the returned `jobId` immediately
+→ poll `mcp__claude-review__review_status(jobId, waitSeconds=30)` until `done=true`
+→ use the completed status payload's `response` as the reviewer output
 
 Apply feedback before finalizing.
 

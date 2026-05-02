@@ -87,3 +87,58 @@ export OPENAI_API_KEY="your-key"
 ### NOT installed = ZERO impact
 
 If Oracle is not installed, `— reviewer: oracle-pro` gracefully falls back to Codex. No error, no breakage, just a warning.
+
+---
+
+## Optional: Claude Sonnet 4.6 via Local `claude-review` MCP
+
+When the user explicitly passes `— reviewer: claude`, route the review through the local `claude-review` MCP bridge instead of Codex MCP. The bridge calls `claude -p --model $CLAUDE_REVIEW_MODEL` via subprocess (default model set by the `CLAUDE_REVIEW_MODEL` env var in the MCP server config; recommended: `claude-sonnet-4-6`).
+
+### Routing Logic (async pattern — avoids 120 s MCP timeout)
+
+```
+If `— reviewer: claude`:
+    → Call mcp__claude-review__review_start(prompt=...) → returns {jobId}
+    → Save jobId
+    → Poll mcp__claude-review__review_status(jobId, waitSeconds=30) until done=true
+    → Extract response and threadId from the completed status payload
+
+    Round 2+ (multi-round loops):
+    → Call mcp__claude-review__review_reply_start(threadId=..., prompt=...) → returns {jobId}
+    → Poll review_status until done=true
+```
+
+### Invariants
+
+- `— reviewer: claude` ONLY takes effect when explicitly passed (or read from `reviewer.txt`)
+- Reviewer independence protocol still applies (pass file paths, not summaries)
+- Requires: Claude Code CLI installed locally + `claude-review` MCP registered in executor client
+- If `claude-review` MCP is not available, print a warning and fall back to Codex xhigh
+- Model is pinned by `CLAUDE_REVIEW_MODEL` env var in the MCP server config — not at call time
+
+### Skills That Support `— reviewer: claude`
+
+| Skill | Where branching happens |
+|-------|------------------------|
+| `/paper-writing` | Phase 0 (writes `paper/.aris/reviewer.txt`); sub-skills read it |
+| `/auto-review-loop` | Step 0 init (writes `review-stage/reviewer.txt`); all review phases |
+| `/auto-paper-improvement-loop` | Steps 2 and 5 (reads `paper/.aris/reviewer.txt`) |
+| `/paper-plan` | Step 6 cross-review (reads `paper/.aris/reviewer.txt`) |
+| `/paper-write` | Step 6 cross-review (reads `paper/.aris/reviewer.txt`) |
+| `/paper-figure` | Step 7 quality review (reads `paper/.aris/reviewer.txt`) |
+
+### Installation
+
+```bash
+# Register claude-review MCP in Claude Code
+claude mcp add claude-review -s user -- python3 /path/to/mcp-servers/claude-review/server.py
+
+# Set reviewer model in MCP environment (or export in shell)
+export CLAUDE_REVIEW_MODEL=claude-sonnet-4-6
+
+# For Opencode: add to ~/.opencode/config.json (see mcp-servers/claude-review/README.md)
+```
+
+### NOT installed = ZERO impact
+
+If `claude-review` MCP is not installed, `— reviewer: claude` falls back to Codex. No error, no breakage, just a warning.

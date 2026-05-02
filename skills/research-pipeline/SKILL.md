@@ -15,10 +15,11 @@ End-to-end autonomous research workflow for: **$ARGUMENTS**
 - **ARXIV_DOWNLOAD = false** — When `true`, `/research-lit` downloads the top relevant arXiv PDFs during literature survey. When `false` (default), only fetches metadata via arXiv API. Passed through to `/idea-discovery` → `/research-lit`.
 - **HUMAN_CHECKPOINT = false** — When `true`, the auto-review loops (Stage 4) pause after each round's review to let you see the score and provide custom modification instructions before fixes are implemented. When `false` (default), loops run fully autonomously. Passed through to `/auto-review-loop`.
 - **REVIEWER_DIFFICULTY = medium** — How adversarial the reviewer is. `medium` (default): standard MCP review. `hard`: adds reviewer memory + debate protocol. `nightmare`: GPT reads repo directly via `codex exec` + memory + debate. Passed through to `/auto-review-loop`.
+- **REVIEWER_BACKEND = `codex`** — Reviewer backend. `codex` (default): Codex MCP xhigh. `claude`: local Claude Code CLI via `claude-review` MCP. Override: `— reviewer: claude`. Passed through to `/auto-review-loop` and `/paper-writing`.
 - **AUTO_WRITE = false** — When `true`, automatically invoke Workflow 3 (`/paper-writing`) after Stage 5. Requires `VENUE` to be set. When `false` (default), Stage 5 generates `NARRATIVE_REPORT.md` and stops — user invokes `/paper-writing` manually.
 - **VENUE = ICLR** — Target venue for paper writing (Stage 6). Only used when `AUTO_WRITE=true`. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `IEEE_CONF`, `IEEE_JOURNAL`.
 
-> 💡 Override via argument, e.g., `/research-pipeline "topic" — AUTO_PROCEED: false, human checkpoint: true, difficulty: nightmare, auto_write: true, venue: NeurIPS`.
+> 💡 Override via argument, e.g., `/research-pipeline "topic" — AUTO_PROCEED: false, human checkpoint: true, difficulty: nightmare, auto_write: true, venue: NeurIPS, reviewer: claude`.
 
 ## Overview
 
@@ -126,7 +127,7 @@ Wait for experiments to complete. Collect results.
 Once initial results are in, start the autonomous improvement loop:
 
 ```
-/auto-review-loop "$ARGUMENTS — [chosen idea title], difficulty: $REVIEWER_DIFFICULTY"
+/auto-review-loop "$ARGUMENTS — [chosen idea title], difficulty: $REVIEWER_DIFFICULTY, reviewer: $REVIEWER_BACKEND"
 ```
 
 **What this does (up to 4 rounds):**
@@ -212,7 +213,7 @@ Checks before proceeding:
 Then invoke:
 
 ```
-/paper-writing "NARRATIVE_REPORT.md" — venue: $VENUE
+/paper-writing "NARRATIVE_REPORT.md" — venue: $VENUE, reviewer: $REVIEWER_BACKEND
 ```
 
 This delegates to Workflow 3 which handles its own phases:

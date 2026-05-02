@@ -33,7 +33,7 @@ DEBUG_LOG = Path(os.environ.get("CLAUDE_REVIEW_DEBUG_LOG", f"/tmp/{SERVER_NAME}-
 STATE_DIR = Path(
     os.environ.get(
         "CLAUDE_REVIEW_STATE_DIR",
-        str(Path.home() / ".codex" / "state" / SERVER_NAME),
+        str(Path.home() / ".aris" / "state" / SERVER_NAME),
     )
 )
 JOBS_DIR = STATE_DIR / "jobs"

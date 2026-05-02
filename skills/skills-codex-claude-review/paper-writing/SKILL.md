@@ -2,8 +2,10 @@
 name: paper-writing
 description: "Workflow 3: Full paper writing pipeline. Orchestrates paper-plan → paper-figure → figure-spec/paper-illustration/mermaid-diagram → paper-write → paper-compile → auto-paper-improvement-loop to go from a narrative report to a polished PDF. At `— effort: max | beast` (or explicit `— assurance: submission`), Phase 6 gates the Final Report on `tools/verify_paper_audits.sh`; the PDF is labelled `submission-ready` only when the external verifier is green. Use when user says \"写论文全流程\", \"write paper pipeline\", \"从报告到PDF\", \"paper writing\", or wants the complete paper generation workflow."
 argument-hint: [narrative-report-path-or-topic]
-allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, Skill, mcp__codex__codex, mcp__codex__codex-reply, mcp__claude-review__review_start, mcp__claude-review__review_reply_start, mcp__claude-review__review_status
+allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent, Skill, mcp__claude-review__review_start, mcp__claude-review__review_reply_start, mcp__claude-review__review_status
 ---
+
+> **Legacy overlay for Codex CLI `cp -a` users only.** If you installed ARIS with `install_aris.sh`, use the base `— reviewer: claude` parameter instead — it is already wired into the base `skills/paper-writing/SKILL.md` and requires no overlay. This file is only needed when you installed by copying (`cp -a`) rather than symlinking, because the symlink-based install cannot use overlays without replacing the symlink. Set `CLAUDE_REVIEW_MODEL=claude-sonnet-4-6` in the MCP environment to pin the reviewer model.
 
 # Workflow 3: Paper Writing Pipeline
 
@@ -26,12 +28,12 @@ In this hybrid pack, the pipeline itself is unchanged, but `paper-plan` and `pap
 
 - **VENUE = `ICLR`** — Target venue. Options: `ICLR`, `NeurIPS`, `ICML`, `CVPR`, `ACL`, `AAAI`, `ACM`, `IEEE_JOURNAL` (IEEE Transactions / Letters), `IEEE_CONF` (IEEE conferences). Affects style file, page limit, citation format.
 - **MAX_IMPROVEMENT_ROUNDS = 2** — Number of review→fix→recompile rounds in the improvement loop.
-- **REVIEWER_BACKEND = `codex`** — Reviewer backend for plan review, figure review, writing review, and improvement loop. `codex` (default): uses `mcp__codex__codex` xhigh. `claude`: routes all reviewer calls through the local `claude-review` MCP bridge (set `CLAUDE_REVIEW_MODEL=claude-sonnet-4-6` in the MCP environment). Override: `— reviewer: claude`.
+- **REVIEWER_MODEL = `claude-review`** — Claude reviewer invoked through the local `claude-review` MCP bridge. Set `CLAUDE_REVIEW_MODEL` in the MCP environment to specify which Claude model (e.g. `claude-sonnet-4-6`).
 - **AUTO_PROCEED = true** — Auto-continue between phases. Set `false` to pause and wait for user approval after each phase.
 - **HUMAN_CHECKPOINT = false** — When `true`, the improvement loop (Phase 5) pauses after each round's review to let you see the score and provide custom modification instructions. When `false` (default), the loop runs fully autonomously. Passed through to `/auto-paper-improvement-loop`.
 - **ILLUSTRATION = `figurespec`** — Architecture/illustration generator for Phase 2b: `figurespec` (default, deterministic JSON→SVG via `/figure-spec`, best for architecture/workflow/topology), `gemini` (AI-generated via `/paper-illustration`, best for qualitative method illustrations; needs `GEMINI_API_KEY`), `codex-image2` (AI-generated via `/paper-illustration-image2` through the local Codex native image bridge — no external API key, uses your ChatGPT Plus/Pro quota; experimental), `mermaid` (Mermaid syntax via `/mermaid-diagram`, free, best for flowcharts), or `false` (skip Phase 2b, manual only).
 
-> Override inline: `/paper-writing "NARRATIVE_REPORT.md" — venue: NeurIPS, illustration: gemini, human checkpoint: true, reviewer: claude`
+> Override inline: `/paper-writing "NARRATIVE_REPORT.md" — venue: NeurIPS, illustration: gemini, human checkpoint: true`
 > IEEE example: `/paper-writing "NARRATIVE_REPORT.md" — venue: IEEE_JOURNAL`
 
 ## Inputs
@@ -64,14 +66,7 @@ verifier reads the same value. **Run once at pipeline start, before Phase 1.**
 ```bash
 mkdir -p paper/.aris
 echo "<resolved-level>" > paper/.aris/assurance.txt   # draft or submission
-echo "<resolved-backend>" > paper/.aris/reviewer.txt  # codex or claude
 ```
-
-**Reviewer backend resolution** (first match wins):
-1. Explicit `— reviewer: codex | claude` in `$ARGUMENTS`
-2. Default: `codex`
-
-Sub-skills (`/paper-plan`, `/paper-figure`, `/paper-write`, `/auto-paper-improvement-loop`) read `paper/.aris/reviewer.txt` at their review step and branch MCP calls accordingly — no extra CLI arguments need to be passed.
 
 **What each level does downstream:**
 
@@ -92,7 +87,7 @@ discouraged for actual submissions. See
 **Announce the resolved level in-line before Phase 1:**
 
 ```
-📋 Assurance: <level> (derived from effort: <effort>) | Reviewer: <codex | claude>
+📋 Assurance: <level> (derived from effort: <effort>)
    <either "current behavior, no audit gate" OR "mandatory audits gated by tools/verify_paper_audits.sh">
 ```
 
@@ -110,7 +105,7 @@ Invoke `/paper-plan` to create the structural outline:
 - Design section structure (5-8 sections depending on paper type)
 - Plan figure/table placement with data sources
 - Scaffold citation structure
-- GPT-5.4 reviews the plan for completeness
+- Claude reviews the plan for completeness (via `claude-review` MCP)
 
 **Output:** `PAPER_PLAN.md` with section plan, figure plan, citation scaffolding.
 
@@ -142,7 +137,7 @@ Invoke `/paper-figure` to generate data-driven plots and tables:
 - Generate matplotlib/seaborn plots from JSON/CSV data
 - Generate LaTeX comparison tables
 - Create `figures/latex_includes.tex` for easy insertion
-- GPT-5.4 reviews figure quality and captions
+- Claude reviews figure quality and captions (via `claude-review` MCP)
 
 **Output:** `figures/` directory with PDFs, generation scripts, and LaTeX snippets.
 
@@ -230,7 +225,7 @@ Invoke `/paper-write` to generate section-by-section LaTeX:
 - Clean stale files from previous section structures
 - Automated bib cleaning (remove uncited entries)
 - De-AI polish (remove "delve", "pivotal", "landscape"...)
-- GPT-5.4 reviews each section for quality
+- Claude reviews each section for quality (via `claude-review` MCP)
 
 **Output:** `paper/` directory with `main.tex`, `sections/*.tex`, `references.bib`, `math_commands.tex`.
 
@@ -283,7 +278,7 @@ Shall I proceed with the improvement loop?
 ```
 if paper contains \begin{theorem} or \begin{lemma} or \begin{proof}:
     Run /proof-checker "paper/"
-    This invokes GPT-5.4 xhigh to:
+    This invokes the external reviewer (xhigh reasoning) to:
     - Verify all proof steps (hypothesis discharge, interchange justification, etc.)
     - Check for logic gaps, quantifier errors, missing domination conditions
     - Attempt counterexamples on key lemmas
@@ -326,9 +321,9 @@ Invoke `/auto-paper-improvement-loop` to polish the paper:
 
 **What this does (2 rounds):**
 
-**Round 1:** GPT-5.4 xhigh reviews the full paper → identifies CRITICAL/MAJOR/MINOR issues → Claude Code implements fixes → recompile → save `main_round1.pdf`
+**Round 1:** Claude (via `claude-review` MCP) reviews the full paper → identifies CRITICAL/MAJOR/MINOR issues → executor implements fixes → recompile → save `main_round1.pdf`
 
-**Round 2:** GPT-5.4 xhigh re-reviews with conversation context → identifies remaining issues → Claude Code implements fixes → recompile → save `main_round2.pdf`
+**Round 2:** Claude re-reviews with conversation context (via `mcp__claude-review__review_reply_start`) → identifies remaining issues → executor implements fixes → recompile → save `main_round2.pdf`
 
 **Typical improvements:**
 - Fix assumption-model mismatches
@@ -379,7 +374,7 @@ After the final paper-claim-audit passes, run `/citation-audit` to verify every 
 ```
 if paper/references.bib (or paper.bib) exists and contains entries cited from sec/*.tex:
     Run /citation-audit "paper/"
-    Fresh cross-family reviewer (gpt-5.4 via Codex MCP) with web/DBLP/arXiv lookup
+    Fresh cross-family reviewer (Claude via claude-review MCP) with web/DBLP/arXiv lookup
     verifies each entry:
       (i)   EXISTENCE — paper resolves at claimed arXiv ID / DOI / venue
       (ii)  METADATA — author names, year, venue, title match canonical sources
@@ -467,8 +462,8 @@ skipping audits while claiming to have run them.
 
 #### Invoking the three audits
 
-Each sub-audit runs in a **fresh Codex thread** (never `codex-reply`,
-never pass prior audit output as context — this preserves reviewer
+Each sub-audit runs in a **fresh `claude-review` thread** (never
+`review_reply_start` without a prior `threadId` — this preserves reviewer
 independence per `shared-references/reviewer-independence.md`).
 
 Each sub-audit **always** emits its JSON artifact, even when the content
