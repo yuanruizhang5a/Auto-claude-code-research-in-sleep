@@ -1,0 +1,111 @@
+This is for guiding you how to write the skill `paper-refine-zyr`. 
+Enrich the skill according to the following requirements. 
+
+Below is a description of what the skill should be:
+
+# Description of Skill
+
+## Specification Content for Guidance
+
+There are particular specification content $SPEC the user provides for you for guidance. 
+They are contained in the **pair of tags** `!++...++!` everywhere in the paper. 
+$SPEC can be nested, e.g.
+```
+!++
+some content
+    !++
+    some other content !++ some other contet ++!
+    ++!
+++!
+```
+Note that you MUST **ignore** the $SPEC that are in the comment mode in latex, e.g.
+```
+%!++ content should be ignored ++!
+```
+or 
+```
+\ifx
+!++ content should be ignored ++!
+\fi
+```
+or
+```
+\begin{comment}
+
+\end{comment}
+```
+, etc. Use your knowledge about latex to recognize other types of comments if there are. 
+
+### Types of $SPEC
+
+Each $SPEC can be specified by one or more key information, called `types`, started by a symbol `@`. E.g., @hint, @inst, etc. When the information of a type is a sentence (that consists of several words separated by spaces), one can use `[...]` to wrap it. E.g. @[paraphrase the following 2 paragraphs]. 
+
+The following types of $SPEC have special functions in guiding you for content generation. 
+Except for these types, the user can also DIY their types as he wishes. For DIY types, use your wisdom to understand them. 
+
+@hint : Providing information that helps you make decisions during the paper working. If spec. of this type is provided, take it as a clue or basis to guide your work. 
+    * A @hint can be the user's main ideas about what a particular part of the paper should contain. 
+    * A @hint can also imply what you should do next, acting as an @inst. 
+    Use your wisdom to recognize its different roles under the context and act accordingly. 
+
+@inst : Providing an explicit instruction for you to follow. The this type of spec. is used, the user means that you should do exactly what it tells. 
+
+@word : Meaning that you should wording, polish the content of this $SPEC. 
+
+@enrich : Meaning that you should enrich the content of $SPEC, to make it formal, or to make ti more like the content of a paper (not just pain draft). 
+    * Note that do NOT try to alter the main research idea behind the content of $SPEC. Just improve the content so that it reach the level of what a paper should be. 
+
+
+## Behaviours of Skill
+
+### Paper Refining
+
+Fulfill the missing parts to form a complete paper. 
+
+- Create a new tex file for editing (always keep the original file unchanged). Set a parameter for the user to enter the file name, but use a default value when not provided. 
+
+- Enrich the content of the paper by adding necessary explanations in text. But never alter or propose new research ideas not shown up in the current version. (PS: Your adding content should be a complement to the current version. Do not add any new research content, or alter any existed research ideas behind these contents (you can edit text but do NOT try to add any of your own thoughts). )
+
+- Write/modify/enrich the abstraction part, following the principles as stated in ./skills/paper-write/SKILL.md (the part `0 Abstract` of `Section-Specific Guidelines`). 
+
+- Write/modify/enrich the Introduction part, following the principles as stated in ./skills/paper-write/SKILL.md (the part `1 Instruction` of `Section-Specific Guidelines`). 
+
+- When doing your work, follow the specific instructions $SPEC. Replace $SPEC with your work. Take $SPEC as the highest priority, if it conflicts with other requirements. 
+
+- Do not change the section structure of the whole paper without user's explicit instructions. You can add subsections freely. 
+
+- Do not change the original `head settings` before `\begin{document}`, you can add any new content if you need, but let the user know your change. 
+
+- As you go, use brief and simple sentence to explain your each step (I want to learn). 
+
+- As for the writing style, strictly follow the file `writingStyle.json`. 
+
+### Writing style
+
+The writing style when generating the text. 
+
+- Set a parameter to denote the path of the users' previous writing materials. It can be a folder or a .pdf/.md/.txt file. Do NOT set a default value, the user should provide it when calling this skill. If not provided, ask the user to provide. 
+
+- Before doing any generation work, start a sub-agent (using your agent tool), which will perform reading these materials, and learn the writing style from them. It summarizes the results into a .json file `writingStyle.json` and return to its parent agent. 
+    * About the format of this .json file: should include entries that you think is important for determine a person's writing style, and a `description` for each entry, which describes this item.  
+
+### Tex Compiling
+
+After the generation, start a sub-agent to compile the tex file. 
+
+The sub-agent should make sure it can be successfully compiled. If not, do the debugging and re-try, until it is successfully compiled. 
+After compiled, return the result and return to the main agent. 
+
+### About Agents Orchestration
+
+The main agent (i.e. the skill) use a .json file `orchestrator.json` to communicate with its sub-agents. This file should contain the following entries:
+
+- timestamps : when the whole skill starts.
+- current stage: at which stage current skill is at. Every sub-agent modifies this entry to change the current status. Order the stages by putting restrictions. E.g., if the sub-agent has not yet finish reading the materials, the main agent cannot proceed. 
+- necessary parameters : one agent can generate for the other agent to use. E.g., a sub-agent generate the writing-style file and fill up the parameter `path of the writing-style file` in orchestrator.json, and the main agent or other sub-agents can find the file according to this parameter. Think of other parameters that are needed yourself. 
+
+## Others
+
+- All the .json files for communication between agents should be created in the folder `com` in the path of this skill. 
+
+- Currently, this skill file work alone and it is OK that it is not connected to other parts of this project. 
