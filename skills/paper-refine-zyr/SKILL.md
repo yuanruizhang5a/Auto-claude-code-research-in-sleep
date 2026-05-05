@@ -12,7 +12,7 @@ Refine the paper at: **$ARGUMENTS**
 
 Invocation format:
 ```
-/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: refined_paper.tex]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: refined_paper.tex] [--instructions: "additional instructions"]
 ```
 
 ## Parameters
@@ -22,6 +22,7 @@ Invocation format:
 | positional arg | yes | — | Path to the source `.tex` file to refine |
 | `style-materials` | **yes** | none — ask user if missing | Path to user's reference writing materials (folder, `.pdf`, `.md`, or `.txt`) |
 | `output` | no | `refined_<original_filename>.tex` in the same directory | Output `.tex` filename |
+| `instructions` | no | — | Free-form instructions to apply to the output file. When provided, Step 2 is **skipped** and Step 2.5 runs instead. |
 
 **If `style-materials` is not provided, stop and ask the user before proceeding.**
 
@@ -43,35 +44,42 @@ All inter-agent communication files live in `skills/paper-refine-zyr/com/`. Crea
     "output_tex": "absolute path to the output .tex file",
     "style_materials": "path provided by the user",
     "writing_style_file": "absolute path to writingStyle.json once written by the style-learning sub-agent",
+    "instructions": null,
     "compile_success": null
   },
   "stage_gate": {
-    "style_learning_done": false,
-    "refining_done": false,
-    "compile_done": false
+    "init_done": false,
+    "style_learning_done": false
   }
 }
 ```
 
-Each sub-agent **must** update `current_stage`, `stage_notes`, and the relevant `stage_gate` flag before returning.
+Each sub-agent **must** update `current_stage` and `stage_notes` before returning. Sub-agents that own a `stage_gate` flag (currently only the Step 1 style-learning sub-agent) must also set their flag to `true`.
 
 ---
 
 ## Workflow
 
+**General rule for steps with a stage_gate flag (Steps 0 and 1):** at the start of each such step, read `orchestrator.json` and check the flag. If already `true`, the step finished in a prior run—skip it. Steps 2, 2.5, and 3 have no stage_gate flag and always run.
+
+**Always on every invocation:** before the branch decision, write the current invocation's `--instructions` value (or `null`) into `parameters.instructions` in `orchestrator.json`, even if Step 0 is skipped. This ensures the branch decision always reflects the current call.
+
 ### Step 0: Initialise
 
-1. Parse the invocation arguments: source `.tex` path, `style-materials` path, and optional `output` filename.
+Check `stage_gate.init_done`. If `true`, skip this step.
+
+1. Parse the invocation arguments: source `.tex` path, `style-materials` path, optional `output` filename, and optional `--instructions`.
 2. If `style-materials` is missing, ask the user and halt.
 3. Create `skills/paper-refine-zyr/com/` if not present.
 4. Write the initial `orchestrator.json` with `current_stage: "init"` and all stage gates `false`.
 5. Copy the source `.tex` to the output path **without modification**. All edits happen only on the output file from this point forward. Never touch the original.
+6. Update `orchestrator.json`: set `stage_gate.init_done = true` and `current_stage = "style_learning"`.
 
 ---
 
 ### Step 1: Style-Learning Sub-Agent
 
-Spawn a sub-agent with the following mandate:
+Check `stage_gate.style_learning_done`. If `true`, skip this step and use the `writing_style_file` path already recorded in `parameters.writing_style_file`. Otherwise, spawn a sub-agent with the following mandate:
 
 > **Role:** Writing-style analyst.
 >
@@ -107,7 +115,13 @@ Spawn a sub-agent with the following mandate:
 > 4. Update `orchestrator.json`: set `parameters.writing_style_file` to the absolute path of the generated file, set `stage_gate.style_learning_done = true`, and set `current_stage = "refining"`.
 > 5. Return a one-paragraph summary of the author's dominant style traits.
 
-The main agent **must not** proceed to Step 2 until `stage_gate.style_learning_done == true`.
+---
+
+**Branch decision — Step 2 vs Step 2.5:** read `parameters.instructions` from `orchestrator.json`:
+- If `null` or empty: execute **Step 2**. Skip Step 2.5.
+- If it contains text: skip Step 2 entirely and execute **Step 2.5** instead.
+
+After whichever step runs, continue directly to Step 3.
 
 ---
 
@@ -142,6 +156,7 @@ Scan the **output `.tex` file** for all `!++ ... ++!` blocks. This is the user's
 | `@inst` | Explicit instruction—do exactly what it says. |
 | `@word` | Polish / re-word the content of this spec block. |
 | `@enrich` | Make the content more formal and paper-quality. Do NOT alter the underlying research idea. |
+| `@ref` | Fill in reference information (e.g. a `\cite{}`, `\ref{}`, footnote, or URL). Derive the target from context—surrounding text, paper topic, nearby bibliography—or from a hint the user appends after `@ref` inside the spec block (e.g. `!++ @ref [the original LTL paper by Pnueli] ++!`). If you cannot determine a reliable reference, insert a `!<< VERIFY: <reason> >>!` placeholder rather than guessing. |
 | DIY types | Apply your best judgement from context. |
 
 $SPEC take the **highest priority** over all other requirements. When a spec conflicts with another rule below, the spec wins.
@@ -193,7 +208,33 @@ For all other sections:
 
 ---
 
-#### 2e. Progress Narration
+#### 2e. Reference Filling
+
+After content enrichment (2b–2d), scan the **entire output `.tex` file** for every unresolved reference hole and attempt to fill it with the correct information.
+
+**What counts as a reference hole:**
+- Any `@ref` $SPEC block (e.g. `!++ @ref [the original LTL paper by Pnueli] ++!`)
+- Empty or placeholder `\cite{}` commands (empty key, or keys like `?`, `TODO`, `FIXME`, `XX`)
+- Empty or placeholder `\ref{}` / `\eqref{}` / `\autoref{}` commands
+- Other similar LaTeX reference forms you recognise as unfilled
+
+**How to fill each hole — consult sources in this order:**
+
+1. **Nearby $SPEC hint**: if the hole is inside or immediately adjacent to a `@ref` $SPEC block, use that hint as the primary guide.
+2. **Paper context**: infer from the surrounding prose, section content, and already-defined `\label{}` targets in the file.
+3. **Project `.bib` files**: search all `.bib` files found in the working project directory (and its subdirectories) for a matching entry.
+4. **Personal library**: clone or fetch `https://github.com/yuanruizhang5a/MyLibrary.git` (read-only, do not modify) and search `./Bibtex/reference.bib` within it.
+5. **Web search**: only if all above sources fail to yield a confident match.
+
+**Rules:**
+- Do **not** guess. If no source provides a reliable match, insert a `!<< VERIFY: <reason> >>!` placeholder in place of the hole and move on.
+- When a `\cite{}` key is resolved, ensure the corresponding BibTeX entry exists in the project's `.bib` file; copy it from the library `.bib` if needed.
+- When a `\ref{}` target is resolved to a `\label{}` that does not yet exist in the file, add the `\label{}` at the appropriate location and record the addition in the Final Report.
+- Do not remove or alter any `!<< VERIFY: ... >>!` placeholders left by earlier steps.
+
+---
+
+#### 2f. Progress Narration
 
 As you work through each part, output a brief (1–2 sentence) plain-English explanation of what you are doing and why. This is intentional—the user wants to learn.
 
@@ -202,12 +243,26 @@ Example:
 
 ---
 
-#### 2f. Completion
+#### 2g. Completion
 
 After all sections are processed:
 
 1. Save the enriched output `.tex` file.
-2. Update `orchestrator.json`: set `stage_gate.refining_done = true`, `current_stage = "compiling"`.
+2. Update `orchestrator.json`: set `current_stage = "compiling"`.
+
+---
+
+### Step 2.5: User Ad-hoc Instructions (re-run only)
+
+This step runs **only** when `--instructions` is provided in the invocation. It replaces Step 2 for this run.
+
+Execute the instructions passed via `--instructions` on the output `.tex` file. Instructions are free-form: edits, rewrites, additions, removals, or any other modification the user specifies.
+
+Rules:
+- Do **not** re-run the full §2a–2g enrichment pipeline; only act on what the instructions say.
+- If an instruction conflicts with a $SPEC tag remaining in the file, flag the conflict to the user before acting.
+- Record a brief note of what was done in `stage_notes` of `orchestrator.json`.
+- After completing, set `current_stage = "compiling"` and proceed to Step 3.
 
 ---
 
@@ -233,12 +288,12 @@ Spawn a sub-agent with the following mandate:
 >    - If still failing after 5 attempts, report the remaining errors clearly to the user and halt.
 > 4. On success:
 >    - Report: "Compiled successfully. Output PDF: `<path>`."
->    - Update `orchestrator.json`: `parameters.compile_success = true`, `stage_gate.compile_done = true`, `current_stage = "done"`.
+>    - Update `orchestrator.json`: `parameters.compile_success = true`, `current_stage = "done"`.
 > 5. On final failure:
 >    - Update `orchestrator.json`: `parameters.compile_success = false`, `current_stage = "error"`, `stage_notes = "<error summary>"`.
 >    - Return the error summary.
 
-The main agent waits for `stage_gate.compile_done == true` (or `current_stage == "error"`) before reporting to the user.
+The main agent waits for `current_stage == "done"` (or `"error"`) before reporting to the user.
 
 ---
 
@@ -261,7 +316,7 @@ Report to the user:
 - **Ignore $SPEC in comments.** Use LaTeX comment-detection knowledge carefully.
 - **Do not invent research content.** Enrichment means clarity and completeness, not new ideas.
 - **Do not change section structure** unless an `@inst` $SPEC explicitly requests it.
-- **Notify user of preamble changes** even if small.
+- **Preamble changes go to the Final Report**, not as immediate interruptions—collect them silently and list them all in Step 4.
 - **Narrate briefly** as you work—the user wants to learn from each step.
 - **Style first.** Load `writingStyle.json` before writing a single sentence; every generated sentence must reflect it.
 - **All communication files** (`orchestrator.json`, `writingStyle.json`) live in `skills/paper-refine-zyr/com/`.

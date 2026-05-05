@@ -1,0 +1,12 @@
+Add a part for filling-up the references in `Step 2: Paper Refining`: 
+
+it checks every @ref in $SPEC, `\cite{}`, `\ref{}`, or the other similar forms in latex you can recognize, and try to fill it up with the correct information. 
+
+To fill it up the right information, you should:
+    - Refer to the hint described in $SPEC nearby (especially if the hole itself is in a $SPEC tagged by @ref)
+    - Refer to the context of the paper
+    - Refer to the following .bib files IN ORDER (indicating the priority) before doing web-search:
+        * the .bib files in the working project in current path
+        * the .bib file in path `./Bibtex/reference.bib` of the repo. `https://github.com/yuanruizhang5a/MyLibrary.git`. 
+
+If cannot find related information, do not guess, but adding a !<< VERIFY: <reason> >>! placeholder. 
