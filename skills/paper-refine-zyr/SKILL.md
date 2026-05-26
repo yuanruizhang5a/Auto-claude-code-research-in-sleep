@@ -12,7 +12,7 @@ Refine the paper at: **$ARGUMENTS**
 
 Invocation format:
 ```
-/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: refined_paper.tex] [--instructions: "additional instructions"]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: refined_paper.tex] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
 ```
 
 ## Parameters
@@ -23,8 +23,18 @@ Invocation format:
 | `style-materials` | **yes** | none — ask user if missing | Path to user's reference writing materials (folder, `.pdf`, `.md`, or `.txt`) |
 | `output` | no | `refined_<original_filename>.tex` in the same directory | Output `.tex` filename |
 | `instructions` | no | — | Free-form instructions to apply to the output file. When provided, Step 2 is **skipped** and Step 2.5 runs instead. |
+| `include` | no | — | Comma-separated section/subsection titles that the skill may edit during Step 2 or Step 2.5. Matching is case-insensitive after trimming whitespace. If omitted, all sections remain eligible unless excluded. |
+| `exclude` | no | — | Comma-separated section/subsection titles that the skill must skip during Step 2 or Step 2.5. Matching is case-insensitive after trimming whitespace. If omitted, no sections are skipped by default. |
 
 **If `style-materials` is not provided, stop and ask the user before proceeding.**
+
+**Section-scope rules for `include` / `exclude`:**
+
+- Selectors target logical LaTeX section and subsection headings by title, not raw line ranges.
+- A matched section selector includes all nested subsections unless a nested subsection is explicitly excluded.
+- If both parameters are provided, the editable set is: matched `include` sections minus matched `exclude` sections.
+- If neither parameter is provided, the skill behaves exactly as before and may operate on the full paper.
+- If a selector matches nothing, do not guess; report the unmatched selector in the Final Report.
 
 ## Communication Files
 
@@ -45,6 +55,8 @@ All inter-agent communication files live in `skills/paper-refine-zyr/com/`. Crea
     "style_materials": "path provided by the user",
     "writing_style_file": "absolute path to writingStyle.json once written by the style-learning sub-agent",
     "instructions": null,
+    "include": null,
+    "exclude": null,
     "compile_success": null
   },
   "stage_gate": {
@@ -62,13 +74,13 @@ Each sub-agent **must** update `current_stage` and `stage_notes` before returnin
 
 **General rule for steps with a stage_gate flag (Steps 0 and 1):** at the start of each such step, read `orchestrator.json` and check the flag. If already `true`, the step finished in a prior run—skip it. Steps 2, 2.5, and 3 have no stage_gate flag and always run.
 
-**Always on every invocation:** before the branch decision, write the current invocation's `--instructions` value (or `null`) into `parameters.instructions` in `orchestrator.json`, even if Step 0 is skipped. This ensures the branch decision always reflects the current call.
+**Always on every invocation:** before the branch decision, write the current invocation's `--instructions`, `--include`, and `--exclude` values (or `null`) into `parameters` in `orchestrator.json`, even if Step 0 is skipped. This ensures the branch decision and edit scope always reflect the current call.
 
 ### Step 0: Initialise
 
 Check `stage_gate.init_done`. If `true`, skip this step.
 
-1. Parse the invocation arguments: source `.tex` path, `style-materials` path, optional `output` filename, and optional `--instructions`.
+1. Parse the invocation arguments: source `.tex` path, `style-materials` path, optional `output` filename, optional `--instructions`, optional `--include`, and optional `--exclude`.
 2. If `style-materials` is missing, ask the user and halt.
 3. Create `skills/paper-refine-zyr/com/` if not present.
 4. Write the initial `orchestrator.json` with `current_stage: "init"` and all stage gates `false`.
@@ -123,11 +135,20 @@ Check `stage_gate.style_learning_done`. If `true`, skip this step and use the `w
 
 After whichever step runs, continue directly to Step 3.
 
+**Scope resolution for Step 2 / Step 2.5:** before making any content edit, resolve the editable section set from `parameters.include` and `parameters.exclude`:
+- Match selectors against section/subsection titles case-insensitively after trimming whitespace.
+- If `include` is empty, start from the full document body; otherwise start from the matched include set.
+- Remove all matched exclude selectors from that set.
+- Apply Step 2 and Step 2.5 edits only inside the resulting editable section set.
+- The preamble is never part of section scoping and still follows the existing preamble rules.
+- Step 3 compile fixes are exempt from this scope restriction and may make minimal compilation-only edits anywhere if required.
+
 ---
 
 ### Step 2: Paper Refining
 
 Load `writingStyle.json` from the path in `orchestrator.json`. All generated text must conform to the style entries in that file.
+Before any rewrite, resolve the editable section set from `parameters.include` / `parameters.exclude` and keep a list of unmatched selectors for Step 4.
 
 #### 2a. Parse $SPEC Tags
 
@@ -161,6 +182,8 @@ Scan the **output `.tex` file** for all `!++ ... ++!` blocks. This is the user's
 
 $SPEC take the **highest priority** over all other requirements. When a spec conflicts with another rule below, the spec wins.
 
+Only process a `$SPEC` block if it is located inside the editable section set. Leave `$SPEC` blocks outside the editable set untouched, and report those skipped blocks in the Final Report.
+
 After processing each spec, replace the entire `!++ ... ++!` block (including the tags themselves) with the generated content.
 
 ---
@@ -180,6 +203,7 @@ Write or rewrite the abstract section following these guidelines (adapted from `
 - **Quantitative results**: include one if the paper has experiments or benchmarks; omit if the paper is purely theoretical or presents only case studies—do not fabricate numbers.
 - No citations, no undefined acronyms.
 - Match the author's style from `writingStyle.json`.
+- Skip this step if `Abstract` is outside the editable section set.
 
 ---
 
@@ -195,6 +219,7 @@ Write or rewrite the introduction following these guidelines (adapted from `skil
 - **Roadmap**: end with a brief "The rest of this paper is organised as…" sentence.
 - Include a reference to a main figure or diagram if one is already present; for theory papers this may be a commutative diagram, reduction graph, or type-derivation example rather than a plot.
 - Match the author's style from `writingStyle.json`.
+- Skip this step if `Introduction` is outside the editable section set.
 
 ---
 
@@ -205,12 +230,26 @@ For all other sections:
 - Add necessary explanatory sentences to make the text clearer and more complete—but **never introduce new research ideas** and **never alter existing research ideas**. Your additions complement; they do not innovate.
 - Do **not** change the section structure (section headings and their order) without an explicit `@inst` in a $SPEC block. You may freely add or rearrange subsections.
 - Do **not** modify the preamble (everything before `\begin{document}`) without explicit user instruction. If you must add a package or macro for correctness, add it silently and record every such change; report them all together in the Final Report (Step 4).
+- Apply this step only to sections inside the editable section set.
 
 ---
 
-#### 2e. Reference Filling
+#### 2e. Conclusion
 
-After content enrichment (2b–2d), scan the **entire output `.tex` file** for every unresolved reference hole and attempt to fill it with the correct information.
+Write or rewrite the conclusion section so it clearly summarizes the paper's content and takeaways.
+
+- Synthesize the problem setting, the paper's approach, and the main findings or contributions.
+- Emphasize what the paper establishes or enables without introducing new claims or new research ideas.
+- Optionally mention limitations or future work only if the draft already supports them.
+- Match the author's style from `writingStyle.json`.
+- If the paper has no explicit conclusion-like section, do not invent a new section; record that fact in the Final Report.
+- Skip this step if the conclusion section is outside the editable section set.
+
+---
+
+#### 2f. Reference Filling
+
+After content enrichment (2b–2e), scan the **editable sections of the output `.tex` file** for every unresolved reference hole and attempt to fill it with the correct information.
 
 **What counts as a reference hole:**
 - Any `@ref` $SPEC block (e.g. `!++ @ref [the original LTL paper by Pnueli] ++!`)
@@ -231,10 +270,11 @@ After content enrichment (2b–2d), scan the **entire output `.tex` file** for e
 - When a `\cite{}` key is resolved, ensure the corresponding BibTeX entry exists in the project's `.bib` file; copy it from the library `.bib` if needed.
 - When a `\ref{}` target is resolved to a `\label{}` that does not yet exist in the file, add the `\label{}` at the appropriate location and record the addition in the Final Report.
 - Do not remove or alter any `!<< VERIFY: ... >>!` placeholders left by earlier steps.
+- Only fill holes located inside the editable section set. Adding a supporting `.bib` entry or a missing `\label{}` is allowed when required to complete an in-scope fix.
 
 ---
 
-#### 2f. Progress Narration
+#### 2g. Progress Narration
 
 As you work through each part, output a brief (1–2 sentence) plain-English explanation of what you are doing and why. This is intentional—the user wants to learn.
 
@@ -243,7 +283,7 @@ Example:
 
 ---
 
-#### 2g. Completion
+#### 2h. Completion
 
 After all sections are processed:
 
@@ -259,7 +299,8 @@ This step runs **only** when `--instructions` is provided in the invocation. It 
 Execute the instructions passed via `--instructions` on the output `.tex` file. Instructions are free-form: edits, rewrites, additions, removals, or any other modification the user specifies.
 
 Rules:
-- Do **not** re-run the full §2a–2g enrichment pipeline; only act on what the instructions say.
+- Do **not** re-run the full §2a–2h enrichment pipeline; only act on what the instructions say.
+- Constrain all edits to the editable section set resolved from `--include` / `--exclude`.
 - If an instruction conflicts with a $SPEC tag remaining in the file, flag the conflict to the user before acting.
 - Record a brief note of what was done in `stage_notes` of `orchestrator.json`.
 - After completing, set `current_stage = "compiling"` and proceed to Step 3.
@@ -283,7 +324,7 @@ Spawn a sub-agent with the following mandate:
 >    Fall back to `pdflatex` twice + `bibtex` + `pdflatex` twice if `latexmk` is not available.
 > 3. If compilation fails:
 >    - Read the `.log` file to identify errors.
->    - Fix each error in the output `.tex` (only fix compilation errors—do not alter content).
+>    - Fix each error in the output `.tex` (only fix compilation errors—do not alter content). These compile-only fixes may touch sections outside the Step 2 / Step 2.5 editable set if necessary for successful compilation.
 >    - Re-try. Repeat until successful or until 5 attempts are exhausted.
 >    - If still failing after 5 attempts, report the remaining errors clearly to the user and halt.
 > 4. On success:
@@ -304,8 +345,9 @@ Report to the user:
 1. **Output file:** absolute path to the refined `.tex` file.
 2. **Compilation status:** success with PDF path, or failure with error summary.
 3. **Changes summary:** a brief list of what was changed and why (Abstract, Introduction, $SPEC replacements, any preamble additions).
-4. If preamble was modified: explicitly list each change.
-5. If any $SPEC were skipped or ambiguous: list them for the user's attention.
+4. **Scope summary:** which sections were included, excluded, and ultimately treated as editable for this run.
+5. If preamble was modified: explicitly list each change.
+6. If any `$SPEC` or sections were skipped, ambiguous, or unmatched due to scope selection: list them for the user's attention.
 
 ---
 
@@ -316,6 +358,7 @@ Report to the user:
 - **Ignore $SPEC in comments.** Use LaTeX comment-detection knowledge carefully.
 - **Do not invent research content.** Enrichment means clarity and completeness, not new ideas.
 - **Do not change section structure** unless an `@inst` $SPEC explicitly requests it.
+- **`include` / `exclude` only scope Step 2 and Step 2.5 content edits.** They do not restrict minimal compile-only fixes in Step 3.
 - **Preamble changes go to the Final Report**, not as immediate interruptions—collect them silently and list them all in Step 4.
 - **Narrate briefly** as you work—the user wants to learn from each step.
 - **Style first.** Load `writingStyle.json` before writing a single sentence; every generated sentence must reflect it.
