@@ -20,46 +20,46 @@ These skills cover the experiment follow-up chain:
 
 ## Install
 
-> 💡 **Recommended: project-local symlink** (since v0.4.2). Project isolation keeps ARIS workflows separate from other community skill packs (Superpowers, etc.). See issue [#118](https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/issues/118).
+> 💡 **Recommended: use the dedicated Codex installer.** It installs or updates the Codex-native package in `~/.codex/skills/`, supports optional reviewer overlays, and can sync MCP bridge files without auto-registering them.
 
 ```bash
 # 1. Clone ARIS once to a stable location
 git clone https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep.git ~/aris_repo
 
-# 2. Attach to a Codex project (auto-detects platform from AGENTS.md):
-cd ~/your-paper-project
-bash ~/aris_repo/tools/install_aris.sh
-# → creates .agents/skills/aris symlink → <aris-repo>/skills/skills-codex/
-# → adds managed block to AGENTS.md telling agent to use only project-local skills
+# 2. Install or update the base Codex-native skill set
+bash ~/aris_repo/tools/install_codex_skills.sh
 
-# Windows (PowerShell, junctions need admin or developer mode):
-.\tools\install_aris.ps1 C:\path\to\your-paper-project
+# 3. Optional: switch the reviewer backend overlay
+bash ~/aris_repo/tools/install_codex_skills.sh --reviewer claude --print-mcp-hints
+bash ~/aris_repo/tools/install_codex_skills.sh --reviewer gemini --print-mcp-hints
+
+# 4. Preview changes only
+bash ~/aris_repo/tools/install_codex_skills.sh --dry-run
 ```
 
 <details>
-<summary><b>Alternative: legacy global install (`~/.codex/skills/`)</b></summary>
+<summary><b>Alternative: legacy manual install (`~/.codex/skills/`)</b></summary>
 
 ```bash
 cp -a ~/aris_repo/skills/skills-codex/* ~/.codex/skills/
 ```
 
-Global install increases the risk of skill name collisions when other community skill packs are also installed globally. Use only if you understand the trade-off and don't mix ARIS with other packs.
+For reviewer overlays, copy the overlay package after the base install:
+
+```bash
+cp -a ~/aris_repo/skills/skills-codex-claude-review/* ~/.codex/skills/
+# or
+cp -a ~/aris_repo/skills/skills-codex-gemini-review/* ~/.codex/skills/
+```
+
+Use the manual path only if you intentionally do not want the managed installer.
 
 </details>
 
 <details>
-<summary><b>Alternative: project-local copy (per-project customization)</b></summary>
+<summary><b>Why not use `install_aris.sh` for Codex?</b></summary>
 
-```bash
-mkdir -p ~/your-project/.agents/skills
-bash ~/aris_repo/tools/smart_update.sh \
-    --project ~/your-project \
-    --target-subdir .agents/skills/aris \
-    --apply
-# Update with the same command (smart_update detects personal customizations)
-```
-
-</details>
+The current `tools/install_aris.sh` is for the Claude-style `.claude/skills/` install path. For Codex, use `tools/install_codex_skills.sh` instead.
 
 Optional companion dependency for the `deepxiv` skill:
 
