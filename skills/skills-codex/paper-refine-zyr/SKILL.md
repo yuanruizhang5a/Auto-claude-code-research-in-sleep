@@ -12,7 +12,9 @@ Refine the paper at: **$ARGUMENTS**
 
 Invocation format:
 ```
-/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: refined_paper.tex] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: path/to/custom_refined.tex] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--overwrite] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
 ```
 
 ## Parameters
@@ -21,7 +23,8 @@ Invocation format:
 |---|---|---|---|
 | positional arg | yes | — | Path to the source `.tex` file to refine |
 | `style-materials` | **yes** | none — ask user if missing | Path to user's reference writing materials (folder, `.pdf`, `.md`, or `.txt`) |
-| `output` | no | `refined_<original_filename>.tex` in the same directory | Output `.tex` filename |
+| `output` | no | `<base>_rN.tex` in the same directory, where `N` is the first unused positive integer and `<base>` does not end with another repeated refinement suffix | Output `.tex` filename. Each run creates a new refined file by default rather than reusing a previous default output. If the source file already ends with `_rN`, increment that suffix to `_r(N+1)` instead of appending another `_rN`. |
+| `overwrite` | no | off | If present, overwrite the source `.tex` file directly. This flag wins over `output`, so the skill edits the original file in place instead of creating a new refined `.tex` file. |
 | `instructions` | no | — | Free-form instructions to apply to the output file. When provided, Step 2 is **skipped** and Step 2.5 runs instead. |
 | `include` | no | — | Comma-separated section/subsection titles that the skill may edit during Step 2 or Step 2.5. Matching is case-insensitive after trimming whitespace. If omitted, all sections remain eligible unless excluded. |
 | `exclude` | no | — | Comma-separated section/subsection titles that the skill must skip during Step 2 or Step 2.5. Matching is case-insensitive after trimming whitespace. If omitted, no sections are skipped by default. |
@@ -38,29 +41,34 @@ Invocation format:
 
 ## Communication Files
 
-All inter-agent communication files live in a per-paper communication directory derived from the resolved output path for the current run.
+All inter-agent communication files live in one shared workspace-local communication directory for this skill:
 
-Define:
+- `COM_DIR=./com`
 
-- `OUTPUT_TEX`: the explicit `--output` path if provided; otherwise `refined_<original_filename>.tex` in the same directory as the source `.tex`
-- `COM_DIR`: `$(dirname "$OUTPUT_TEX")/.paper-refine-zyr-com`
+If `./com` does not exist, create it. The primary orchestration file is `./com/orchestrator.json`.
 
-Create `COM_DIR` if it does not exist. The primary orchestration file is `COM_DIR/orchestrator.json`.
+Define `OUTPUT_TEX` separately from `COM_DIR`:
+
+- `OUTPUT_TEX`: the source `.tex` path if `--overwrite` is present; otherwise the explicit `--output` path if provided; otherwise the default output path defined in the `output` parameter above
 
 ### orchestrator.json Schema
 
 ```json
 {
   "timestamps": {
-    "skill_start": "ISO-8601 datetime when the main skill started"
+    "skill_start": "ISO-8601 datetime when the current run started",
+    "last_init": "ISO-8601 datetime when Step 0 last performed initialization work",
+    "last_style_learning": "ISO-8601 datetime when Step 1 last generated writingStyle.json"
   },
   "current_stage": "one of: init | style_learning | refining | compiling | done | error",
   "stage_notes": "free-text notes for the current stage (e.g. what the sub-agent just did)",
   "parameters": {
     "source_tex": "absolute path to the original .tex file",
     "output_tex": "absolute path to the output .tex file",
+    "overwrite": false,
     "style_materials": "path provided by the user",
-    "writing_style_file": "absolute path to writingStyle.json once written by the style-learning sub-agent",
+    "style_materials_for_writing_style": "path last used to generate ./com/writingStyle.json",
+    "writing_style_file": "absolute path to ./com/writingStyle.json once written by the style-learning sub-agent",
     "instructions": null,
     "include": null,
     "exclude": null,
@@ -73,39 +81,50 @@ Create `COM_DIR` if it does not exist. The primary orchestration file is `COM_DI
 }
 ```
 
-Each sub-agent **must** update `current_stage` and `stage_notes` before returning. Sub-agents that own a `stage_gate` flag (currently only the Step 1 style-learning sub-agent) must also set their flag to `true`.
+Each sub-agent **must** update `current_stage` and `stage_notes` before returning. The shared `orchestrator.json` is workspace-local state for the current project and is refreshed on every invocation of the skill.
 
 ---
 
 ## Workflow
 
-**General rule for steps with a stage_gate flag (Steps 0 and 1):** at the start of each such step, read `orchestrator.json` and check the flag. If already `true`, the step finished in a prior run—skip it. Steps 2, 2.5, and 3 have no stage_gate flag and always run.
-
-**Always on every invocation:** before the branch decision, write the current invocation's `--instructions`, `--include`, and `--exclude` values (or `null`) into `parameters` in `orchestrator.json`, even if Step 0 is skipped. This ensures the branch decision and edit scope always reflect the current call.
+**General rule for shared state (Steps 0 and 1):** `./com/orchestrator.json` persists across runs in the same workspace. On every invocation, Step 0 must resolve `OUTPUT_TEX`, ensure shared state files exist, and refresh the current run's `source_tex`, `output_tex`, `overwrite`, `style_materials`, `instructions`, `include`, and `exclude` values before branch decisions are made. Steps 2, 2.5, and 3 always run.
 
 ### Step 0: Initialise
 
-Check `stage_gate.init_done`. If `true`, skip this step.
+Step 0 runs on **every invocation**. Use shared workspace state in `./com/orchestrator.json`, but always perform the initialization work needed for the current invocation parameters.
 
-1. Parse the invocation arguments: source `.tex` path, `style-materials` path, optional `output` filename, optional `--instructions`, optional `--include`, and optional `--exclude`.
+1. Parse the invocation arguments: source `.tex` path, `style-materials` path, optional `output` filename, optional `--overwrite`, optional `--instructions`, optional `--include`, and optional `--exclude`.
 2. If `style-materials` is missing, ask the user and halt.
-3. Resolve `OUTPUT_TEX` and then `COM_DIR="$(dirname "$OUTPUT_TEX")/.paper-refine-zyr-com"`.
-4. Create `COM_DIR` if not present.
-5. Write the initial `orchestrator.json` at `COM_DIR/orchestrator.json` with `current_stage: "init"` and all stage gates `false`.
-6. Copy the source `.tex` to the output path **without modification**. All edits happen only on the output file from this point forward. Never touch the original.
-7. Update `orchestrator.json`: set `stage_gate.init_done = true` and `current_stage = "style_learning"`.
+3. Resolve `OUTPUT_TEX` using this precedence:
+   - if `--overwrite` is present, `OUTPUT_TEX = source_tex`
+   - else if `--output` is present, `OUTPUT_TEX = explicit output path`
+   - else resolve `OUTPUT_TEX` using the default naming rule defined above
+4. Perform the initialization work required by the current invocation parameters:
+   - create `./com` if it does not exist
+   - if `./com/orchestrator.json` does not exist, create it with `current_stage: "init"` and all stage gates `false`
+   - update `./com/orchestrator.json` with the current invocation's `source_tex`, `output_tex`, `overwrite`, `style_materials`, `instructions`, `include`, and `exclude`
+   - if `--overwrite` is present, use the source `.tex` file itself as the working file for all subsequent edits
+   - otherwise, ensure the resolved output `.tex` working copy exists for this run by copying the source `.tex` to `OUTPUT_TEX` only when that file does not yet exist
+   - when creating a new refined `.tex` output file, insert on the first line a provenance comment of the form `%refines <source_filename>` (for example `%refines paper_r5.tex`)
+5. After Step 0 is complete for the current invocation, set `stage_gate.init_done = true`, update `timestamps.last_init`, and set `current_stage = "style_learning"`.
 
 ---
 
 ### Step 1: Style-Learning Sub-Agent
 
-Check `stage_gate.style_learning_done`. If `true`, skip this step and use the `writing_style_file` path already recorded in `parameters.writing_style_file`. Otherwise, spawn a sub-agent with the following mandate:
+Check whether shared style state can be reused. Skip Step 1 only when all are true:
+
+- `./com/writingStyle.json` exists
+- `parameters.writing_style_file` points to `./com/writingStyle.json`
+- the current `style-materials` path matches the previously recorded `parameters.style_materials_for_writing_style`
+
+If any of those conditions fail, run the style-learning sub-agent below:
 
 > **Role:** Writing-style analyst.
 >
 > **Inputs:**
 > - `style_materials` path from `orchestrator.json`.
-> - Output location: `COM_DIR/writingStyle.json`, where `COM_DIR` is derived from the resolved `output_tex` path recorded in `orchestrator.json`.
+> - Output location: `./com/writingStyle.json`.
 >
 > **Task:**
 > 1. Read all provided reference materials (recursively if a folder; handle `.pdf`, `.md`, `.txt`, `.tex`).
@@ -132,7 +151,7 @@ Check `stage_gate.style_learning_done`. If `true`, skip this step and use the `w
 >      }
 >    }
 >    ```
-> 4. Update `orchestrator.json`: set `parameters.writing_style_file` to the absolute path of the generated file, set `stage_gate.style_learning_done = true`, and set `current_stage = "refining"`.
+> 4. Update `orchestrator.json`: set `parameters.writing_style_file` to the absolute path of `./com/writingStyle.json`, set `parameters.style_materials_for_writing_style` to the current `style_materials` path, set `stage_gate.style_learning_done = true`, update `timestamps.last_style_learning`, and set `current_stage = "refining"`.
 > 5. Return a one-paragraph summary of the author's dominant style traits.
 
 ---
@@ -211,7 +230,7 @@ Write or rewrite the abstract section following these guidelines (adapted from `
 - **Quantitative results**: include one if the paper has experiments or benchmarks; omit if the paper is purely theoretical or presents only case studies—do not fabricate numbers.
 - No citations, no undefined acronyms.
 - Match the author's style from `writingStyle.json`.
-- Skip this step if `Abstract` is outside the editable section set.
+- Create or rewrite the paper's abstract according to the paper's LaTeX format even if the abstract is outside the editable section set. Treat the abstract as a special front-matter element, not as a section-title-scoped edit.
 
 ---
 
@@ -309,6 +328,7 @@ Execute the instructions passed via `--instructions` on the output `.tex` file. 
 Rules:
 - Do **not** re-run the full §2a–2h enrichment pipeline; only act on what the instructions say.
 - Constrain all edits to the editable section set resolved from `--include` / `--exclude`.
+- If the instructions target the abstract, allow abstract edits even when the abstract lies outside the section-title editable set. Treat the abstract as the same special front-matter exception used in Step 2b.
 - If an instruction conflicts with a $SPEC tag remaining in the file, flag the conflict to the user before acting.
 - Record a brief note of what was done in `stage_notes` of `orchestrator.json`.
 - After completing, set `current_stage = "compiling"` and proceed to Step 3.
@@ -350,18 +370,19 @@ The main agent waits for `current_stage == "done"` (or `"error"`) before reporti
 
 Report to the user:
 
-1. **Output file:** absolute path to the refined `.tex` file.
+1. **Output file:** absolute path to the refined `.tex` file, or the source `.tex` path if `--overwrite` was used.
 2. **Compilation status:** success with PDF path, or failure with error summary.
 3. **Changes summary:** a brief list of what was changed and why (Abstract, Introduction, $SPEC replacements, any preamble additions).
 4. **Scope summary:** which sections were included, excluded, and ultimately treated as editable for this run.
-5. If preamble was modified: explicitly list each change.
-6. If any `$SPEC` or sections were skipped, ambiguous, or unmatched due to scope selection: list them for the user's attention.
+5. **Write mode:** state explicitly whether the run created a new refined file or overwrote the source `.tex` file in place.
+6. If preamble was modified: explicitly list each change.
+7. If any `$SPEC` or sections were skipped, ambiguous, or unmatched due to scope selection: list them for the user's attention.
 
 ---
 
 ## Key Rules
 
-- **Never modify the original `.tex` file.** All changes go to the output copy.
+- **Default mode preserves the original `.tex` file.** All changes go to the output copy unless `--overwrite` is explicitly present.
 - **$SPEC take highest priority.** They override all other requirements when there is a conflict.
 - **Ignore $SPEC in comments.** Use LaTeX comment-detection knowledge carefully.
 - **Do not invent research content.** Enrichment means clarity and completeness, not new ideas.
@@ -370,5 +391,6 @@ Report to the user:
 - **Preamble changes go to the Final Report**, not as immediate interruptions—collect them silently and list them all in Step 4.
 - **Narrate briefly** as you work—the user wants to learn from each step.
 - **Style first.** Load `writingStyle.json` before writing a single sentence; every generated sentence must reflect it.
-- **All communication files** (`orchestrator.json`, `writingStyle.json`) live in the output-local `COM_DIR`, derived from `output_tex` as `$(dirname "$OUTPUT_TEX")/.paper-refine-zyr-com`.
+- **All communication files** (`orchestrator.json`, `writingStyle.json`) live in the shared workspace-local `./com` directory.
+- **`--overwrite` wins over `--output`.** If both are present, write directly to the source `.tex` file.
 - **Large-file write fallback:** if the `Write` tool fails on size, silently retry with `Bash` (`cat << 'EOF' > file`) without prompting the user.
