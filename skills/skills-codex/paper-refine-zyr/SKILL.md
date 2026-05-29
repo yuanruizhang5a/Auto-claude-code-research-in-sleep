@@ -204,14 +204,21 @@ Scan the **output `.tex` file** for all `!++ ... ++!` blocks. This is the user's
 | `@inst` | Explicit instruction—do exactly what it says. |
 | `@word` | Polish / re-word the content of this spec block. |
 | `@enrich` | Make the content more formal and paper-quality. Do NOT alter the underlying research idea. |
+| `@check` | Check whether the current content of this spec block is stated suitably for the paper, using the surrounding paper context and your general scholarly knowledge. If the content is already suitable, keep it or make only light polish. If it is inaccurate, overstated, underspecified, awkward, or otherwise unsuitable, revise or correct it while preserving the underlying research idea. If you cannot justify a confident correction from context and knowledge, revise conservatively and insert a `!<< VERIFY: <reason> >>!` placeholder instead of guessing. |
 | `@ref` | Fill in reference information (e.g. a `\cite{}`, `\ref{}`, footnote, or URL). Derive the target from context—surrounding text, paper topic, nearby bibliography—or from a hint the user appends after `@ref` inside the spec block (e.g. `!++ @ref [the original LTL paper by Pnueli] ++!`). If you cannot determine a reliable reference, insert a `!<< VERIFY: <reason> >>!` placeholder rather than guessing. |
 | DIY types | Apply your best judgement from context. |
 
 $SPEC take the **highest priority** over all other requirements. When a spec conflicts with another rule below, the spec wins.
 
+For `@check`, judge suitability broadly: factual correctness, claim strength, precision, academic tone, and whether the wording fits the paper's apparent contribution and evidence. `@check` is a quality-control pass, not permission to introduce new claims, new results, new references, or structural changes that are unsupported by the paper. If `@check` appears together with other types, treat `@inst` as binding and apply `@check` to improve the resulting content within that instruction.
+
 Only process a `$SPEC` block if it is located inside the editable section set. Leave `$SPEC` blocks outside the editable set untouched, and report those skipped blocks in the Final Report.
 
 After processing each spec, replace the entire `!++ ... ++!` block (including the tags themselves) with the generated content.
+
+Example:
+`!++ @check We solve this problem perfectly in all settings. ++!`
+should be kept only if the paper actually supports that statement; otherwise rewrite it to a defensible claim or add a `VERIFY` placeholder if the evidence is unclear.
 
 ---
 
@@ -385,6 +392,7 @@ Report to the user:
 - **Default mode preserves the original `.tex` file.** All changes go to the output copy unless `--overwrite` is explicitly present.
 - **$SPEC take highest priority.** They override all other requirements when there is a conflict.
 - **Ignore $SPEC in comments.** Use LaTeX comment-detection knowledge carefully.
+- **`@check` is conservative.** Correct or soften unsuitable content when justified by the paper and general knowledge; when confidence is inadequate, use `!<< VERIFY: ... >>!` instead of asserting a strong correction.
 - **Do not invent research content.** Enrichment means clarity and completeness, not new ideas.
 - **Do not change section structure** unless an `@inst` $SPEC explicitly requests it.
 - **`include` / `exclude` only scope Step 2 and Step 2.5 content edits.** They do not restrict minimal compile-only fixes in Step 3.
