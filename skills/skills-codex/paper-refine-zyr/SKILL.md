@@ -202,8 +202,8 @@ Scan the **output `.tex` file** for all `!++ ... ++!` blocks. This is the user's
 |---|---|
 | `@hint` | A clue or basis to guide your work. May also imply an `@inst`—use context to decide. |
 | `@inst` | Explicit instruction—do exactly what it says. |
-| `@word` | Polish / re-word the content of this spec block. |
-| `@enrich` | Make the content more formal and paper-quality. Do NOT alter the underlying research idea. |
+| `@word` | Polish / re-word / improve the content of this spec block if necessary. |
+| `@improve` | Make the content more formal and paper-quality. Do NOT alter the underlying research idea. |
 | `@check` | Check whether the current content of this spec block is stated suitably for the paper, using the surrounding paper context and your general scholarly knowledge. If the content is already suitable, keep it or make only light polish. If it is inaccurate, overstated, underspecified, awkward, or otherwise unsuitable, revise or correct it while preserving the underlying research idea. If you cannot justify a confident correction from context and knowledge, revise conservatively and insert a `!<< VERIFY: <reason> >>!` placeholder instead of guessing. |
 | `@ref` | Fill in reference information (e.g. a `\cite{}`, `\ref{}`, footnote, or URL). Derive the target from context—surrounding text, paper topic, nearby bibliography—or from a hint the user appends after `@ref` inside the spec block (e.g. `!++ @ref [the original LTL paper by Pnueli] ++!`). If you cannot determine a reliable reference, insert a `!<< VERIFY: <reason> >>!` placeholder rather than guessing. |
 | DIY types | Apply your best judgement from context. |
@@ -214,7 +214,9 @@ For `@check`, judge suitability broadly: factual correctness, claim strength, pr
 
 Only process a `$SPEC` block if it is located inside the editable section set. Leave `$SPEC` blocks outside the editable set untouched, and report those skipped blocks in the Final Report.
 
-After processing each spec, replace the entire `!++ ... ++!` block (including the tags themselves) with the generated content.
+Only remove a `!++ ... ++!` block when you actually perform a direct change to that block's content. If you merely read the block as a hint, reference, constraint, or other guidance for changes made elsewhere, leave the block intact. Do not delete or rewrite a `$SPEC` block that you did not substantively modify.
+
+When you do perform a direct change to a spec block, replace the entire `!++ ... ++!` block (including the tags themselves) with the generated content.
 
 Example:
 `!++ @check We solve this problem perfectly in all settings. ++!`
