@@ -23,6 +23,14 @@ bash tools/install_aris.sh [project_path]
 
 Creates one symlink per skill at `.claude/skills/<skill-name>` and writes a versioned manifest to `.aris/installed-skills.txt`. Re-runnable to reconcile added/removed skills.
 
+Managed global Claude install:
+
+```bash
+bash tools/install_aris_global.sh
+```
+
+Creates one symlink per skill at `~/.claude/skills/<skill-name>` and writes a versioned manifest to `~/.claude/aris-global/installed-skills.txt`. Prefer the project-local installer when you want to avoid collisions with other global skill packs.
+
 ## MCP Server Dependencies
 
 Install per-server as needed — servers are in `mcp-servers/`:
@@ -116,3 +124,11 @@ All in `skills/shared-references/` — read these before modifying skill behavio
 - Meta-optimize event capture: copy `templates/claude-hooks/meta_logging.json` into the project's `.claude/settings.json` to enable. Logs go to `.aris/meta/events.jsonl`.
 - `AUTO_PROCEED: true` in pipeline skills auto-selects the top idea after a 10-second pause; always false at expensive decision gates unless overridden.
 - Large-file write fallback: if the `Write` tool fails on size, skills silently retry with `Bash` (`cat << 'EOF' > file`) without prompting the user.
+<!-- ARIS:BEGIN -->
+## ARIS Skill Scope
+ARIS skills installed in this project: 70 entries.
+Manifest: `.aris/installed-skills.txt` (lists every skill ARIS installed and its upstream target).
+For ARIS workflows, prefer the project-local skills under `.claude/skills/` over global skills.
+Do not modify or delete files inside any skill that is a symlink (symlinks point into `/home/zyr/myCode/Auto-claude-code-research-in-sleep`).
+Update with: `bash /home/zyr/myCode/Auto-claude-code-research-in-sleep/tools/install_aris.sh`  (re-runnable; reconciles new/removed skills).
+<!-- ARIS:END -->

@@ -1256,18 +1256,23 @@ bash ~/aris_repo/tools/smart_update.sh --project ~/your-project --apply
 # (The old --target-subdir .claude/skills/aris is now deprecated — see migration block above.)
 ```
 
-**Global install (one copy in your home dir, available to every project):**
+**Global install (managed symlinks, available to every project):**
 ```bash
-mkdir -p ~/.claude/skills
-cp -r ~/aris_repo/skills/* ~/.claude/skills/
-# Update with: bash tools/smart_update.sh --apply
+bash ~/aris_repo/tools/install_aris_global.sh
+# → creates one symlink per skill: ~/.claude/skills/<skill> → ~/aris_repo/skills/<skill>
+# → writes manifest ~/.claude/aris-global/installed-skills.txt
+# → rerun anytime to reconcile new/removed upstream skills
+
+# Other useful flags:
+bash ~/aris_repo/tools/install_aris_global.sh --dry-run
+bash ~/aris_repo/tools/install_aris_global.sh --uninstall
 ```
 
 > Global install increases the risk of skill name collisions with other globally-installed packs. Use only if you don't mix ARIS with Superpowers / OpenHands / etc. — otherwise prefer the project-local install above.
 
 </details>
 
-> 💡 **New Claude Code versions** may not auto-create `~/.claude/skills/`. If using global install, create it first: `mkdir -p ~/.claude/skills/`. The symlink installer handles directory creation automatically.
+> 💡 **New Claude Code versions** may not auto-create `~/.claude/skills/`. The managed global symlink installer above creates the required directories automatically.
 
 <details>
 <summary><b>Optional: Codex Plugin for Code Review</b></summary>

@@ -910,11 +910,16 @@ bash ~/aris_repo/tools/smart_update.sh --project ~/your-project --apply
 # （老的 --target-subdir .claude/skills/aris 已弃用，见上面的迁移段。）
 ```
 
-**全局安装（一份 copy 在 home 目录，所有项目可用）：**
+**全局安装（托管 symlink，所有项目可用）：**
 ```bash
-mkdir -p ~/.claude/skills
-cp -r ~/aris_repo/skills/* ~/.claude/skills/
-# 更新：bash tools/smart_update.sh --apply
+bash ~/aris_repo/tools/install_aris_global.sh
+# → 每个 skill 一个 symlink: ~/.claude/skills/<skill> → ~/aris_repo/skills/<skill>
+# → 写 manifest ~/.claude/aris-global/installed-skills.txt
+# → 可重入：再跑一次会自动 reconcile 上游的新增/删除
+
+# 其他常用：
+bash ~/aris_repo/tools/install_aris_global.sh --dry-run
+bash ~/aris_repo/tools/install_aris_global.sh --uninstall
 ```
 
 > 全局安装会增加和其他全局 skill 包名字冲突的风险。只在不混装 ARIS 与 Superpowers / OpenHands 等的情况下使用——否则用上面的项目级安装。
@@ -937,7 +942,7 @@ cp -rn skills/* ~/.claude/skills/
 cp -r skills/experiment-bridge ~/.claude/skills/
 ```
 
-> 💡 **选哪个？** 没改过 skill 用 **A**。改过用 **B**（新 skill 会加进来，你的改动保留——但改过的文件不会收到上游 bug fix）。**C** 精确更新。
+> 💡 **更推荐** 用上面的托管 symlink 全局安装器；只有明确需要 copy 工作流时再用这里的手动更新方式。
 
 ### 🌙 过夜自动运行的免确认配置（可选）
 

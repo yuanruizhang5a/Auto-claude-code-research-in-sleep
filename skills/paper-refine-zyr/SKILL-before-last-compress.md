@@ -175,12 +175,10 @@ After whichever step runs, continue directly to Step 3.
 
 ### Step 2: Paper Refining
 
-Shared invariants for Step 2 and Step 2.5:
+Load `writingStyle.json` from the path in `orchestrator.json`. All generated text must conform to the style entries in that file.
+Before any rewrite, resolve the editable section set from `parameters.include` / `parameters.exclude` and keep a list of unmatched selectors for Step 4.
 
-- Load `writingStyle.json` from `orchestrator.json`; all generated text must follow it.
-- Resolve the editable section set from `parameters.include` / `parameters.exclude` before editing and keep unmatched selectors for Step 4.
-- Compare every edit against the Step 0 baseline; every directly inserted, rewritten, or replaced span must be wrapped in `\MO ... \EMO`. Unchanged text stays unwrapped. If an edited span contains a verification placeholder, keep it inside the `\MO ... \EMO` wrapper.
-- Ensure the output `.tex` preamble defines:
+Before any content rewrite, ensure the output `.tex` preamble defines:
 
 ```tex
 \newcommand{\A}[1]{\mbox{ \textbf{#1} }}
@@ -190,20 +188,28 @@ Shared invariants for Step 2 and Step 2.5:
 \newcommand{\EVE}{\A{EVE}}
 ```
 
-Reuse existing compatible definitions instead of redefining them. Treat `\A` as the shared formatter behind `\MO`, `\EMO`, `\VE`, and `\EVE`; if a literal boxed bold `A` is needed, use `\A{A}`.
+Reuse existing compatible definitions if they are already present instead of redefining them. Treat `\A` as the shared formatter macro that the annotation commands `\MO`, `\EMO`, `\VE`, and `\EVE` point to. If the refined output needs a literal boxed bold `A`, use `\A{A}` rather than spelling out `\mbox{ \textbf{A} }` inline.
+
+For this entire step, compare edits against the baseline `.tex` content from Step 0. Every directly inserted, rewritten, or replaced output span must be wrapped in `\MO ... \EMO`. Unchanged text must remain unwrapped. If an edited span contains a verification placeholder, keep that placeholder inside the `\MO ... \EMO` wrapper.
 
 #### 2a. Parse $SPEC Tags
 
-Scan the **output `.tex` file** for `!++ ... ++!` blocks, the user's embedded specification language.
+Scan the **output `.tex` file** for all `!++ ... ++!` blocks. This is the user's embedded specification language.
 
-- Nested tags are allowed to any depth:
+**Parsing rules:**
+
+- Tags can be nested to any depth:
   ```
   !++
     outer spec
       !++ inner spec ++!
   ++!
   ```
-- Ignore specs inside LaTeX comments or conditional-compilation blocks, including line comments (`% ...` after `%` on the same line), `\ifx ... \fi` / `\if... ... \fi`, `\begin{comment} ... \end{comment}`, and any equivalent commenting mechanism you recognise.
+- **Ignore** any `!++ ... ++!` that appears inside a LaTeX comment or conditional-compilation block. Specifically, ignore specs inside:
+  - Line comments: `% ... !++ ... ++! ...` (anything after `%` on the same line)
+  - `\ifx ... \fi` / `\if... ... \fi` blocks
+  - `\begin{comment} ... \end{comment}` blocks
+  - Any other LaTeX commenting mechanism you recognise
 
 **$SPEC type keywords** (prefix `@`; multi-word types use `[...]`):
 
@@ -218,11 +224,17 @@ Scan the **output `.tex` file** for `!++ ... ++!` blocks, the user's embedded sp
 | `@ref` | Fill in reference information (e.g. a `\cite{}`, `\ref{}`, footnote, or URL). Derive the target from context—surrounding text, paper topic, nearby bibliography—or from a hint the user appends after `@ref` inside the spec block (e.g. `!++ @ref [the original LTL paper by Pnueli] ++!`). If you cannot determine a reliable reference, insert a `\VE <reason> \EVE` placeholder rather than guessing. |
 | DIY types | Apply your best judgement from context. |
 
-- `$SPEC` has highest priority over all other requirements.
-- `@check` judges factual correctness, claim strength, precision, tone, and fit to the paper's actual contribution/evidence. It must not introduce unsupported claims, results, references, or structural changes. If `@check` appears with other types, treat `@inst` as binding and then apply `@check`.
-- `@expand` is context-grounded elaboration, not padding or new ideas. If no justified expansion is available, leave the block unchanged.
-- Only process `$SPEC` blocks inside the editable section set. Leave out-of-scope blocks untouched and report them in Step 4.
-- Remove a `!++ ... ++!` block only when you directly change that block's content; if it merely serves as guidance for changes elsewhere, leave it intact. When you do change it, replace the entire block with the generated content.
+$SPEC take the **highest priority** over all other requirements. When a spec conflicts with another rule below, the spec wins.
+
+For `@check`, judge suitability broadly: factual correctness, claim strength, precision, academic tone, and whether the wording fits the paper's apparent contribution and evidence. `@check` is a quality-control pass, not permission to introduce new claims, new results, new references, or structural changes that are unsupported by the paper. If `@check` appears together with other types, treat `@inst` as binding and apply `@check` to improve the resulting content within that instruction.
+
+For `@expand`, prefer context-grounded elaboration over generic padding. Expand only when the current text would benefit from extra explanation for clarity, continuity, or completeness. The expansion must stay aligned with the paper's apparent claims and evidence, and must not introduce a new research idea. If you are unsure what expansion is justified, you may use web search or ask the user; if uncertainty remains and no confident improvement is available, leave the spec block unchanged.
+
+Only process a `$SPEC` block if it is located inside the editable section set. Leave `$SPEC` blocks outside the editable set untouched, and report those skipped blocks in the Final Report.
+
+Only remove a `!++ ... ++!` block when you actually perform a direct change to that block's content. If you merely read the block as a hint, reference, constraint, or other guidance for changes made elsewhere, leave the block intact. Do not delete or rewrite a `$SPEC` block that you did not substantively modify.
+
+When you do perform a direct change to a spec block, replace the entire `!++ ... ++!` block (including the tags themselves) with the generated content.
 
 Example:
 `!++ @check We solve this problem perfectly in all settings. ++!`
@@ -232,37 +244,96 @@ should be kept only if the paper actually supports that statement; otherwise rew
 
 #### 2b. Abstract
 
-Write or rewrite the abstract using the `../paper-write/SKILL.md §0` rubric: 4-to-5-part flow (what, why it matters, how, what is established, optional significance), self-contained, starts from the paper's specific contribution, no citations or undefined acronyms, and includes a quantitative result only when the paper actually has one. The abstract is a special front-matter exception: edit it even if it lies outside the section-title editable set.
+Write or rewrite the abstract section following these guidelines (adapted from `../paper-write/SKILL.md §0`):
+
+- Use a **4-to-5-part flow**, adapted to the nature of the work:
+  1. **What**: the subject, question, or phenomenon the paper addresses.
+  2. **Why it matters** (not necessarily "why it is hard"): for theoretical work, this is often the *importance* or *generality* of the question—e.g., it unifies scattered results, reveals a fundamental limit, or enables reasoning about a broad class of systems. Hardness is one reason to care, but not the only one.
+  3. **How**: the paper's approach, framework, or key construction.
+  4. **What is established**: the main results—theorems, decision procedures, type systems, program logics, language designs, etc. For empirical work, include the strongest quantitative result. For theoretical work, state the principal theorem or contribution precisely but concisely.
+  5. **Significance / take-away** (optional but encouraged): one sentence on what the result enables or changes.
+- Must be self-contained (understandable without reading the paper).
+- Start with the paper's specific contribution, not generic field-level background.
+- **Quantitative results**: include one if the paper has experiments or benchmarks; omit if the paper is purely theoretical or presents only case studies—do not fabricate numbers.
+- No citations, no undefined acronyms.
+- Match the author's style from `writingStyle.json`.
+- Create or rewrite the paper's abstract according to the paper's LaTeX format even if the abstract is outside the editable section set. Treat the abstract as a special front-matter element, not as a section-title-scoped edit.
 
 ---
 
 #### 2c. Introduction
 
-Write or rewrite the introduction using the `../paper-write/SKILL.md §1` rubric: hook, gap/open question, approach overview, 2–4 specific contributions, early evidence/illustration, short roadmap, and a reference to an existing main figure/diagram when appropriate. Skip this step if `Introduction` is outside the editable section set.
+Write or rewrite the introduction following these guidelines (adapted from `../paper-write/SKILL.md §1`):
+
+- **Hook**: open with 1–2 sentences that establish *why the reader should care*. For applied/empirical work this is usually a concrete problem. For theoretical work it may be a general motivation—an open question, a gap between theory and practice, a unification opportunity, or the significance of a class of systems.
+- **Gap or open question**: articulate what is missing or unknown. For work that is not solving a specific hard problem, frame this as: "No general framework exists for …", "It remains unclear whether …", or "Prior work handles X but not Y."
+- **Approach overview**: give a brief, jargon-light description of what the paper does before the reader gets lost in details.
+- **Contributions**: list 2–4 items. These should be *specific and verifiable*, but need not be falsifiable in the empirical sense. Acceptable forms include: a theorem and its proof, a type system and its metatheory, a language design and its semantics, a decision procedure and its complexity, case studies demonstrating applicability.
+- **Evidence / illustration**: preview the strongest result early. For papers with experiments, this is a key number. For papers with only case studies or worked examples, name the case study and what it demonstrates. For purely theoretical papers, state the principal theorem informally.
+- **Roadmap**: end with a brief "The rest of this paper is organised as…" sentence.
+- Include a reference to a main figure or diagram if one is already present; for theory papers this may be a commutative diagram, reduction graph, or type-derivation example rather than a plot.
+- Match the author's style from `writingStyle.json`.
+- Skip this step if `Introduction` is outside the editable section set.
 
 ---
 
 #### 2d. General Enrichment
 
-For all other sections inside the editable section set, add clarifying/completing explanation without introducing or altering research ideas. Do not change section headings or their order unless an `@inst` explicitly asks for it; rearranging or adding subsections is allowed. Do not modify the preamble except for correctness-critical packages/macros, and record every such preamble change for Step 4.
+For all other sections:
+
+- Add necessary explanatory sentences to make the text clearer and more complete—but **never introduce new research ideas** and **never alter existing research ideas**. Your additions complement; they do not innovate.
+- Do **not** change the section structure (section headings and their order) without an explicit `@inst` in a $SPEC block. You may freely add or rearrange subsections.
+- Do **not** modify the preamble (everything before `\begin{document}`) without explicit user instruction. If you must add a package or macro for correctness, add it silently and record every such change; report them all together in the Final Report (Step 4).
+- Apply this step only to sections inside the editable section set.
 
 ---
 
 #### 2e. Conclusion
 
-Write or rewrite the conclusion to summarize the setting, approach, and main findings/contributions, emphasizing what the paper establishes or enables without adding new claims or ideas. Mention limitations/future work only if already supported. If there is no conclusion-like section, do not invent one; report that in Step 4. Skip this step if the conclusion section is outside the editable section set.
+Write or rewrite the conclusion section so it clearly summarizes the paper's content and takeaways.
+
+- Synthesize the problem setting, the paper's approach, and the main findings or contributions.
+- Emphasize what the paper establishes or enables without introducing new claims or new research ideas.
+- Optionally mention limitations or future work only if the draft already supports them.
+- Match the author's style from `writingStyle.json`.
+- If the paper has no explicit conclusion-like section, do not invent a new section; record that fact in the Final Report.
+- Skip this step if the conclusion section is outside the editable section set.
 
 ---
 
 #### 2f. Reference Filling
 
-After 2b–2e, scan the editable sections for unresolved reference holes: `@ref` specs, empty/placeholder `\cite{}`, empty/placeholder `\ref{}` / `\eqref{}` / `\autoref{}`, and equivalent unfilled reference forms. Resolve each hole using this source order: nearby `@ref` hint, paper context and existing `\label{}` targets, project `.bib` files, `https://github.com/yuanruizhang5a/MyLibrary.git` (`./Bibtex/reference.bib`, read-only), then web search. Do not guess: if no reliable match exists, insert `\VE <reason> \EVE`. If a `\cite{}` key is resolved, ensure the BibTeX entry exists in the project `.bib`; if a resolved `\ref{}` needs a missing `\label{}`, add it and report it in Step 4. Preserve pre-existing `\VE ... \EVE` placeholders unless you are substantively resolving or rewriting that exact segment. Only fill holes inside the editable section set, though required supporting `.bib` and `\label{}` additions are allowed.
+After content enrichment (2b–2e), scan the **editable sections of the output `.tex` file** for every unresolved reference hole and attempt to fill it with the correct information.
+
+**What counts as a reference hole:**
+- Any `@ref` $SPEC block (e.g. `!++ @ref [the original LTL paper by Pnueli] ++!`)
+- Empty or placeholder `\cite{}` commands (empty key, or keys like `?`, `TODO`, `FIXME`, `XX`)
+- Empty or placeholder `\ref{}` / `\eqref{}` / `\autoref{}` commands
+- Other similar LaTeX reference forms you recognise as unfilled
+
+**How to fill each hole — consult sources in this order:**
+
+1. **Nearby $SPEC hint**: if the hole is inside or immediately adjacent to a `@ref` $SPEC block, use that hint as the primary guide.
+2. **Paper context**: infer from the surrounding prose, section content, and already-defined `\label{}` targets in the file.
+3. **Project `.bib` files**: search all `.bib` files found in the working project directory (and its subdirectories) for a matching entry.
+4. **Personal library**: clone or fetch `https://github.com/yuanruizhang5a/MyLibrary.git` (read-only, do not modify) and search `./Bibtex/reference.bib` within it.
+5. **Web search**: only if all above sources fail to yield a confident match.
+
+**Rules:**
+- Do **not** guess. If no source provides a reliable match, insert a `\VE <reason> \EVE` placeholder in place of the hole and move on.
+- When a `\cite{}` key is resolved, ensure the corresponding BibTeX entry exists in the project's `.bib` file; copy it from the library `.bib` if needed.
+- When a `\ref{}` target is resolved to a `\label{}` that does not yet exist in the file, add the `\label{}` at the appropriate location and record the addition in the Final Report.
+- Do not remove or alter any `\VE ... \EVE` placeholders left by earlier steps unless you are substantively resolving or rewriting that exact segment.
+- Only fill holes located inside the editable section set. Adding a supporting `.bib` entry or a missing `\label{}` is allowed when required to complete an in-scope fix.
 
 ---
 
 #### 2g. Progress Narration
 
-As you work, output brief 1–2 sentence plain-English explanations of what you are doing and why. Example: "Enriching the second paragraph of §3 to clarify why the loss function uses a KL term rather than cross-entropy—the current draft states the choice without motivation."
+As you work through each part, output a brief (1–2 sentence) plain-English explanation of what you are doing and why. This is intentional—the user wants to learn.
+
+Example:
+> "Enriching the second paragraph of §3 to clarify why the loss function uses a KL term rather than cross-entropy—the current draft states the choice without motivation."
 
 ---
 
@@ -279,7 +350,16 @@ After all sections are processed:
 
 This step runs **only** when `--instructions` is provided in the invocation. It replaces Step 2 for this run.
 
-Execute `--instructions` on the output `.tex` file without re-running the full §2a–2h enrichment pipeline. Keep edits inside the editable section set; allow the same abstract exception as Step 2b. If an instruction conflicts with a remaining `$SPEC`, flag that conflict before acting. Follow the shared annotation rules above, record a brief note in `stage_notes`, then set `current_stage = "compiling"` and proceed to Step 3.
+Execute the instructions passed via `--instructions` on the output `.tex` file. Instructions are free-form: edits, rewrites, additions, removals, or any other modification the user specifies.
+
+Rules:
+- Do **not** re-run the full §2a–2h enrichment pipeline; only act on what the instructions say.
+- Constrain all edits to the editable section set resolved from `--include` / `--exclude`.
+- If the instructions target the abstract, allow abstract edits even when the abstract lies outside the section-title editable set. Treat the abstract as the same special front-matter exception used in Step 2b.
+- If an instruction conflicts with a $SPEC tag remaining in the file, flag the conflict to the user before acting.
+- Wrap every directly modified output span relative to the Step 0 baseline in `\MO ... \EMO`; if the instruction requires a verification placeholder, use literal `\VE <reason> \EVE` inside that wrapper.
+- Record a brief note of what was done in `stage_notes` of `orchestrator.json`.
+- After completing, set `current_stage = "compiling"` and proceed to Step 3.
 
 ---
 
@@ -320,7 +400,9 @@ Report to the user:
 
 1. **Output file:** absolute path to the refined `.tex` file, or the source `.tex` path if `--overwrite` was used.
 2. **Compilation status:** success with PDF path, or failure with error summary.
-3. **Changes summary:** what changed and why (for example Abstract, Introduction, `$SPEC` replacements, preamble additions), explicitly noting `\MO ... \EMO` tagging and any newly introduced `\VE ... \EVE` placeholders.
+3. **Changes summary:** a brief list of what was changed and why (Abstract, Introduction, $SPEC replacements, any preamble additions).
+   - explicitly mention that modified output spans are tagged with `\MO ... \EMO`
+   - explicitly mention any newly introduced `\VE ... \EVE` placeholders
 4. **Scope summary:** which sections were included, excluded, and ultimately treated as editable for this run.
 5. **Write mode:** state explicitly whether the run created a new refined file or overwrote the source `.tex` file in place.
 6. If preamble was modified: explicitly list each change.
@@ -330,11 +412,18 @@ Report to the user:
 
 ## Key Rules
 
-- Preserve the original `.tex` unless `--overwrite` is explicitly present; `--overwrite` wins over `--output`.
-- `$SPEC` has highest priority; ignore `$SPEC` in comments/ignored LaTeX regions.
-- Enrichment improves clarity/completeness without inventing research content; `@check` is conservative and falls back to `\VE ... \EVE` when confidence is inadequate.
-- `include` / `exclude` scope only Step 2 and Step 2.5 content edits, not minimal compile-only fixes in Step 3.
-- Collect preamble changes silently for Step 4 rather than interrupting the run.
-- Narrate briefly while working; every generated sentence must follow `writingStyle.json`.
-- Shared state lives in workspace-local `./com`.
-- If the `Write` tool fails on size, silently retry with `Bash` (`cat << 'EOF' > file`) without prompting.
+- **Default mode preserves the original `.tex` file.** All changes go to the output copy unless `--overwrite` is explicitly present.
+- **$SPEC take highest priority.** They override all other requirements when there is a conflict.
+- **Ignore $SPEC in comments.** Use LaTeX comment-detection knowledge carefully.
+- **`@expand` is optional.** Expand only when it genuinely improves the current explanation; if no useful expansion is needed, leave the block unchanged.
+- **`@check` is conservative.** Correct or soften unsuitable content when justified by the paper and general knowledge; when confidence is inadequate, use `\VE ... \EVE` instead of asserting a strong correction.
+- **Do not invent research content.** Enrichment means clarity and completeness, not new ideas.
+- **Do not change section structure** unless an `@inst` $SPEC explicitly requests it.
+- **`include` / `exclude` only scope Step 2 and Step 2.5 content edits.** They do not restrict minimal compile-only fixes in Step 3.
+- **Preamble changes go to the Final Report**, not as immediate interruptions—collect them silently and list them all in Step 4.
+- **Narrate briefly** as you work—the user wants to learn from each step.
+- **Style first.** Load `writingStyle.json` before writing a single sentence; every generated sentence must reflect it.
+- **All communication files** (`orchestrator.json`, `writingStyle.json`) live in the shared workspace-local `./com` directory.
+- **`--overwrite` wins over `--output`.** If both are present, write directly to the source `.tex` file.
+- **Mark every direct edit.** Every directly modified output span relative to the Step 0 baseline must be wrapped in `\MO ... \EMO`.
+- **Large-file write fallback:** if the `Write` tool fails on size, silently retry with `Bash` (`cat << 'EOF' > file`) without prompting the user.
