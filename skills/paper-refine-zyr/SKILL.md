@@ -210,8 +210,10 @@ Scan the **output `.tex` file** for `!++ ... ++!` blocks, the user's embedded sp
 | Type | Meaning |
 |---|---|
 | `@hint` | A clue or basis to guide your work. May also imply an `@inst`—use context to decide. |
+| `@mini` | When making changes for this spec block, try to make the minimum necessary change relative to the original content. Preserve wording, structure, and local phrasing as much as possible while still satisfying the other active spec types and the paper context. |
 | `@inst` | Explicit instruction—do exactly what it says. |
 | `@word` | Polish / re-word / improve the content of this spec block if necessary. |
+| `@rewrite` | Rewrite the current content of this spec block according to the current paper context. Preserve the intended meaning and the underlying research idea unless the surrounding context clearly requires correction. Use the local section, neighboring claims, terminology, and paper narrative to produce a version that fits naturally into the paper. |
 | `@improve` | Make the content more formal and paper-quality. Do NOT alter the underlying research idea. |
 | `@expand` | Enrich, expand, or complement the explanation of the current content of this spec block according to the surrounding context and your understanding of the paper. Add clarifying detail, missing connective explanation, intuition, or brief elaboration only when it materially improves the paper. If the current content is already adequately developed, do not change this part. |
 | `@check` | Check whether the current content of this spec block is stated suitably for the paper, using the surrounding paper context and your general scholarly knowledge. If the content is already suitable, keep it or make only light polish. If it is inaccurate, overstated, underspecified, awkward, or otherwise unsuitable, revise or correct it while preserving the underlying research idea. If you cannot justify a confident correction from context and knowledge, revise conservatively and insert a `\VE <reason> \EVE` placeholder instead of guessing. |
@@ -219,6 +221,7 @@ Scan the **output `.tex` file** for `!++ ... ++!` blocks, the user's embedded sp
 | DIY types | Apply your best judgement from context. |
 
 - `$SPEC` has highest priority over all other requirements.
+- `@mini` means make the smallest justified edit. When combined with other types, satisfy those types while keeping the output as close as reasonably possible to the original block.
 - `@check` judges factual correctness, claim strength, precision, tone, and fit to the paper's actual contribution/evidence. It must not introduce unsupported claims, results, references, or structural changes. If `@check` appears with other types, treat `@inst` as binding and then apply `@check`.
 - `@expand` is context-grounded elaboration, not padding or new ideas. If no justified expansion is available, leave the block unchanged.
 - Only process `$SPEC` blocks inside the editable section set. Leave out-of-scope blocks untouched and report them in Step 4.
