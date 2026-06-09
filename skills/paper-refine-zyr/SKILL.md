@@ -210,6 +210,7 @@ Scan the **output `.tex` file** for `!++ ... ++!` blocks, the user's embedded sp
 | Type | Meaning |
 |---|---|
 | `@hint` | A clue or basis to guide your work. May also imply an `@inst`—use context to decide. |
+| `@keep` | Keep the current content of this spec block unchanged, and append your modified version immediately below the original content rather than replacing it. Use this when the original wording should remain visible while your revised or enriched version is added after it. |
 | `@mini` | When making changes for this spec block, try to make the minimum necessary change relative to the original content. Preserve wording, structure, and local phrasing as much as possible while still satisfying the other active spec types and the paper context. |
 | `@inst` | Explicit instruction—do exactly what it says. |
 | `@word` | Polish / re-word / improve the content of this spec block if necessary. |
@@ -221,11 +222,12 @@ Scan the **output `.tex` file** for `!++ ... ++!` blocks, the user's embedded sp
 | DIY types | Apply your best judgement from context. |
 
 - `$SPEC` has highest priority over all other requirements.
+- `@keep` means preserve the original block content verbatim and place your modified output directly below it. When combined with other types, apply those types to produce the appended version rather than replacing the original text.
 - `@mini` means make the smallest justified edit. When combined with other types, satisfy those types while keeping the output as close as reasonably possible to the original block.
 - `@check` judges factual correctness, claim strength, precision, tone, and fit to the paper's actual contribution/evidence. It must not introduce unsupported claims, results, references, or structural changes. If `@check` appears with other types, treat `@inst` as binding and then apply `@check`.
 - `@expand` is context-grounded elaboration, not padding or new ideas. If no justified expansion is available, leave the block unchanged.
 - Only process `$SPEC` blocks inside the editable section set. Leave out-of-scope blocks untouched and report them in Step 4.
-- Remove a `!++ ... ++!` block only when you directly change that block's content; if it merely serves as guidance for changes elsewhere, leave it intact. When you do change it, replace the entire block with the generated content.
+- Remove a `!++ ... ++!` block only when you directly change that block's content; if it merely serves as guidance for changes elsewhere, leave it intact. When you do change it, replace the entire block with the generated content, except when `@keep` is present: in that case, preserve the original block content and append the generated version immediately below it.
 
 Example:
 `!++ @check We solve this problem perfectly in all settings. ++!`
