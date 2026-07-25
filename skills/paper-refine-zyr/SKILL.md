@@ -1,7 +1,7 @@
 ---
 name: paper-refine-zyr
-description: "Refine and enrich an existing LaTeX paper by following embedded !++...++! spec tags, learning the user's writing style from reference materials, and compiling the result."
-argument-hint: "[path/to/paper.tex] — style-materials: path/to/materials"
+description: "Refine and enrich an existing LaTeX paper by following embedded !++...++! spec tags, learning the user's writing style from reference materials, and optionally compiling the result."
+argument-hint: "[path/to/paper.tex] — style-materials: path/to/materials [--no-compile]"
 allowed-tools: Bash(*), Read, Write, Edit, Grep, Glob, Agent
 user-invocable: true
 ---
@@ -12,9 +12,9 @@ Refine the paper at: **$ARGUMENTS**
 
 Invocation format:
 ```
-/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
-/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: path/to/custom_refined.tex] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
-/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--overwrite] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"] [--no-compile]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--output: path/to/custom_refined.tex] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"] [--no-compile]
+/paper-refine-zyr path/to/paper.tex --style-materials: path/to/materials [--overwrite] [--instructions: "additional instructions"] [--include: "Abstract, Introduction"] [--exclude: "Related Work"] [--no-compile]
 ```
 
 ## Parameters
@@ -28,6 +28,7 @@ Invocation format:
 | `instructions` | no | — | Free-form instructions to apply to the output file. When provided, Step 2 is **skipped** and Step 2.5 runs instead. |
 | `include` | no | — | Comma-separated section/subsection titles that the skill may edit during Step 2 or Step 2.5. Matching is case-insensitive after trimming whitespace. If omitted, all sections remain eligible unless excluded. |
 | `exclude` | no | — | Comma-separated section/subsection titles that the skill must skip during Step 2 or Step 2.5. Matching is case-insensitive after trimming whitespace. If omitted, no sections are skipped by default. |
+| `no-compile` | no | off | If present, do not compile the output after modification. Skip Step 3, set `compile_success` to `null`, and report that compilation was intentionally skipped. |
 
 **If `style-materials` is not provided, stop and ask the user before proceeding.**
 
@@ -72,6 +73,7 @@ Define `OUTPUT_TEX` separately from `COM_DIR`:
     "instructions": null,
     "include": null,
     "exclude": null,
+    "no_compile": false,
     "compile_success": null
   },
   "stage_gate": {
@@ -87,13 +89,13 @@ Each sub-agent **must** update `current_stage` and `stage_notes` before returnin
 
 ## Workflow
 
-**General rule for shared state (Steps 0 and 1):** `./com/orchestrator.json` persists across runs in the same workspace. On every invocation, Step 0 must resolve `OUTPUT_TEX`, ensure shared state files exist, and refresh the current run's `source_tex`, `output_tex`, `overwrite`, `style_materials`, `instructions`, `include`, and `exclude` values before branch decisions are made. Steps 2, 2.5, and 3 always run.
+**General rule for shared state (Steps 0 and 1):** `./com/orchestrator.json` persists across runs in the same workspace. On every invocation, Step 0 must resolve `OUTPUT_TEX`, ensure shared state files exist, and refresh the current run's `source_tex`, `output_tex`, `overwrite`, `style_materials`, `instructions`, `include`, `exclude`, and `no_compile` values before branch decisions are made. Step 2 or Step 2.5 always runs. Step 3 runs unless `--no-compile` is present.
 
 ### Step 0: Initialise
 
 Step 0 runs on **every invocation**. Use shared workspace state in `./com/orchestrator.json`, but always perform the initialization work needed for the current invocation parameters.
 
-1. Parse the invocation arguments: source `.tex` path, `style-materials` path, optional `output` filename, optional `--overwrite`, optional `--instructions`, optional `--include`, and optional `--exclude`.
+1. Parse the invocation arguments: source `.tex` path, `style-materials` path, optional `output` filename, optional `--overwrite`, optional `--instructions`, optional `--include`, optional `--exclude`, and optional `--no-compile`.
 2. If `style-materials` is missing, ask the user and halt.
 3. Resolve `OUTPUT_TEX` using this precedence:
    - if `--overwrite` is present, `OUTPUT_TEX = source_tex`
@@ -102,7 +104,7 @@ Step 0 runs on **every invocation**. Use shared workspace state in `./com/orches
 4. Perform the initialization work required by the current invocation parameters:
    - create `./com` if it does not exist
    - if `./com/orchestrator.json` does not exist, create it with `current_stage: "init"` and all stage gates `false`
-   - update `./com/orchestrator.json` with the current invocation's `source_tex`, `output_tex`, `overwrite`, `style_materials`, `instructions`, `include`, and `exclude`
+   - update `./com/orchestrator.json` with the current invocation's `source_tex`, `output_tex`, `overwrite`, `style_materials`, `instructions`, `include`, `exclude`, and `no_compile`; reset `compile_success` to `null`
    - if `--overwrite` is present, use the source `.tex` file itself as the working file for all subsequent edits
    - otherwise, ensure the resolved output `.tex` working copy exists for this run by copying the source `.tex` to `OUTPUT_TEX` only when that file does not yet exist
    - when creating a new refined `.tex` output file, insert on the first line a provenance comment of the form `%refines <source_filename>` (for example `%refines paper_r5.tex`)
@@ -161,7 +163,7 @@ If any of those conditions fail, run the style-learning sub-agent below:
 - If `null` or empty: execute **Step 2**. Skip Step 2.5.
 - If it contains text: skip Step 2 entirely and execute **Step 2.5** instead.
 
-After whichever step runs, continue directly to Step 3.
+After whichever step runs, continue to Step 3 unless `parameters.no_compile` is `true`. When it is `true`, skip Step 3, leave `parameters.compile_success = null`, set `current_stage = "done"`, and continue to Step 4.
 
 **Scope resolution for Step 2 / Step 2.5:** before making any content edit, resolve the editable section set from `parameters.include` and `parameters.exclude`:
 - Match selectors against section/subsection titles case-insensitively after trimming whitespace.
@@ -276,7 +278,7 @@ As you work, output brief 1–2 sentence plain-English explanations of what you 
 After all sections are processed:
 
 1. Save the enriched output `.tex` file.
-2. Update `orchestrator.json`: set `current_stage = "compiling"`.
+2. Update `orchestrator.json`: if `parameters.no_compile` is `true`, leave `parameters.compile_success = null` and set `current_stage = "done"`; otherwise set `current_stage = "compiling"`.
 
 ---
 
@@ -284,11 +286,13 @@ After all sections are processed:
 
 This step runs **only** when `--instructions` is provided in the invocation. It replaces Step 2 for this run.
 
-Execute `--instructions` on the output `.tex` file without re-running the full §2a–2h enrichment pipeline. Keep edits inside the editable section set; allow the same abstract exception as Step 2b. If an instruction conflicts with a remaining `$SPEC`, flag that conflict before acting. Follow the shared annotation rules above, record a brief note in `stage_notes`, then set `current_stage = "compiling"` and proceed to Step 3.
+Execute `--instructions` on the output `.tex` file without re-running the full §2a–2h enrichment pipeline. Keep edits inside the editable section set; allow the same abstract exception as Step 2b. If an instruction conflicts with a remaining `$SPEC`, flag that conflict before acting. Follow the shared annotation rules above and record a brief note in `stage_notes`. If `parameters.no_compile` is `true`, leave `parameters.compile_success = null`, set `current_stage = "done"`, and skip Step 3; otherwise set `current_stage = "compiling"` and proceed to Step 3.
 
 ---
 
 ### Step 3: Compile Sub-Agent
+
+Skip this entire step when `parameters.no_compile` is `true`.
 
 Spawn a sub-agent with the following mandate:
 
@@ -324,7 +328,7 @@ The main agent waits for `current_stage == "done"` (or `"error"`) before reporti
 Report to the user:
 
 1. **Output file:** absolute path to the refined `.tex` file, or the source `.tex` path if `--overwrite` was used.
-2. **Compilation status:** success with PDF path, or failure with error summary.
+2. **Compilation status:** success with PDF path, failure with error summary, or skipped because `--no-compile` was specified.
 3. **Changes summary:** what changed and why (for example Abstract, Introduction, `$SPEC` replacements, preamble additions), explicitly noting `\MO ... \EMO` tagging and any newly introduced `\VE ... \EVE` placeholders.
 4. **Scope summary:** which sections were included, excluded, and ultimately treated as editable for this run.
 5. **Write mode:** state explicitly whether the run created a new refined file or overwrote the source `.tex` file in place.
@@ -339,6 +343,7 @@ Report to the user:
 - `$SPEC` has highest priority; ignore `$SPEC` in comments/ignored LaTeX regions.
 - Enrichment improves clarity/completeness without inventing research content; `@check` is conservative and falls back to `\VE ... \EVE` when confidence is inadequate.
 - `include` / `exclude` scope only Step 2 and Step 2.5 content edits, not minimal compile-only fixes in Step 3.
+- When `--no-compile` is present, do not spawn the compile sub-agent or run any LaTeX compilation command; leave `compile_success` as `null`.
 - Collect preamble changes silently for Step 4 rather than interrupting the run.
 - Narrate briefly while working; every generated sentence must follow `writingStyle.json`.
 - Shared state lives in workspace-local `./com`.
