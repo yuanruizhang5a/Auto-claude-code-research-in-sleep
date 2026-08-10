@@ -27,6 +27,7 @@ Use this contract for every file under workspace-local `./com`. Preserve unknown
 8. Represent unavailable values with JSON `null`; do not use strings such as `"none"` or `"unknown"` when the schema permits `null`.
 9. Preserve invalid JSON unchanged. Write a separate diagnostic and stop.
 10. Snapshot all coordination files to `./com/history/<run_id>/` before `--restart`; never delete earlier snapshots.
+11. Treat `source_tex` and `review_tex` as input paths. Treat `output_tex` and `output_review_tex` as the only mutable document paths. They may equal their sources only when `overwirte` is true.
 
 ## orchestrator.json
 
@@ -48,7 +49,10 @@ Require the following parameter fields for an initialized run:
 ```json
 {
   "source_tex": "/absolute/path/paper.tex",
+  "output_tex": "/absolute/path/paper_r1.tex",
   "review_tex": "/absolute/path/review.tex",
+  "output_review_tex": "/absolute/path/review_r1.tex",
+  "overwirte": false,
   "raw_reviews": ["/absolute/path/reviewer1.txt"],
   "style_materials": "/absolute/path/style-materials",
   "style_materials_for_writing_style": null,
@@ -66,6 +70,8 @@ Require the following parameter fields for an initialized run:
   "compile_success": null
 }
 ```
+
+The `overwirte` spelling is intentional and matches the public flag. In default mode, resolve each output independently using the first unused `_rN` sibling from the source lineage and persist the chosen paths for compatible resumes. When a source already has a terminal `_rK`, advance from `K+1` after removing repeated terminal revision suffixes. On `--restart`, choose fresh outputs after saving history. Do not create `output_tex` unless a manuscript mutation is actually approved; always prepare `output_review_tex` before rendering responses. In overwrite mode, require `source_tex == output_tex` and `review_tex == output_review_tex`.
 
 Keep `compile_success` as `null`, `true`, or `false` for compatibility. Store independent paper/review details in `compileResults.json` and the namespaced compilation object.
 
@@ -224,7 +230,7 @@ Store the response-letter rendering plan separately from the issue ledger:
 ```json
 {
   "schema_version": 1,
-  "review_path": "/absolute/path/review.tex",
+  "review_path": "/absolute/path/review_r1.tex",
   "template_path": "/absolute/skill/path/template.tex",
   "template_sha256": "sha256 hex",
   "created_from_default_template": true,
@@ -255,7 +261,7 @@ Record edits before applying them:
       "edit_id": "E-R1-001-a1b2c3d4-01",
       "linked_issue_ids": ["R1-001-a1b2c3d4"],
       "linked_spec_ids": [],
-      "file": "/absolute/path/paper.tex",
+      "file": "/absolute/path/paper_r1.tex",
       "structural_location": "Introduction, paragraph 2",
       "original_text": "Old text.",
       "revised_text": "New text.",
@@ -270,7 +276,7 @@ Record edits before applying them:
   "specs": [
     {
       "spec_id": "S-001-a1b2c3d4",
-      "file": "/absolute/path/paper.tex",
+      "file": "/absolute/path/paper_r1.tex",
       "structural_location": "Section 3",
       "raw_text": "!++ @check ... ++!",
       "types": ["check"],
@@ -294,9 +300,9 @@ Track the two roots independently:
   "documents": [
     {
       "kind": "paper",
-      "source_tex": "/absolute/path/paper.tex",
-      "document_root": "/absolute/path/paper.tex",
-      "pdf_path": "/absolute/path/paper.pdf",
+      "source_tex": "/absolute/path/paper_r1.tex",
+      "document_root": "/absolute/path/paper_r1.tex",
+      "pdf_path": "/absolute/path/paper_r1.pdf",
       "attempts": 1,
       "status": "success",
       "warnings": [],
@@ -305,9 +311,9 @@ Track the two roots independently:
     },
     {
       "kind": "review",
-      "source_tex": "/absolute/path/review.tex",
-      "document_root": "/absolute/path/review.tex",
-      "pdf_path": "/absolute/path/review.pdf",
+      "source_tex": "/absolute/path/review_r1.tex",
+      "document_root": "/absolute/path/review_r1.tex",
+      "pdf_path": "/absolute/path/review_r1.pdf",
       "attempts": 1,
       "status": "success",
       "warnings": [],
@@ -352,6 +358,7 @@ Invalidate only dependent outputs:
 | review template/letter structure | template analysis, rendered response draft, review compilation, audit |
 | revise instructions | user revision, compilation, audit |
 | include/exclude scope | target resolution, edits, spec processing, compilation, audit |
+| `overwirte` or resolved output paths | all mutable artifacts, compilation, audit |
 
 If the saved run is incompatible and `--restart` is absent, stop and explain which fingerprint components differ. Never silently repurpose old state.
 

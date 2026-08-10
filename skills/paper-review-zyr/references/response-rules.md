@@ -47,16 +47,16 @@ For a PDF, extract text without OCR rewriting when a text layer exists. If extra
 
 ## Default response-letter template
 
-When creating a response letter without a user-selected alternative template:
+When creating an output response letter without a user-selected alternative template:
 
 - Use bundled `template.tex` as the structural and formatting basis.
 - Preserve its document class, packages, macros, signature/letter organization, editor/reviewer heading pattern, and `\ranswer{...}` command.
 - Replace example addressee, introduction, editor content, reviewer content, answers, bibliography details, and contact details only when grounded in user/project inputs.
 - Remove example-only markers and ellipses from the created review file.
-- Do not mutate the bundled template.
+- Do not mutate the bundled template or the source review file in default copy-on-write mode.
 - Copy bundled `letterbib.sty` beside the created response letter only when its LaTeX root cannot otherwise resolve that package; never overwrite an existing file.
 
-For an existing response file, treat it as user-selected. Preserve its structure and macros. Ask permission before adding or redefining `\ranswer` when no compatible definition exists.
+For an existing source response file, treat it as user-selected. Preserve its structure and macros when copying it to the resolved `_rN` output. Make all changes in that output unless `--overwirte` is present. Ask permission before adding or redefining `\ranswer` when no compatible definition exists.
 
 Insert every answer using exactly one outer `\ranswer{...}`. Do not wrap reviewer text in `\ranswer`.
 

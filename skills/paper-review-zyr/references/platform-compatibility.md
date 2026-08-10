@@ -101,6 +101,7 @@ SKILL_ROOT/template.tex
 SKILL_ROOT/letterbib.sty
 SKILL_ROOT/references/state-schema.md
 SKILL_ROOT/references/response-rules.md
+SKILL_ROOT/scripts/resolve_revision_paths.py
 SKILL_ROOT/scripts/validate_review_state.py
 ```
 
@@ -116,12 +117,13 @@ Run these checks with the same unchanged skill directory on each available host:
 2. Confirm discovery shows `paper-review-zyr` and the frontmatter description.
 3. Invoke it explicitly with a temporary minimal paper, a plain-text review, style material, and `--no-compile`.
 4. Confirm the host resolves `template.tex`, `letterbib.sty`, both references, and the validator relative to `SKILL.md`.
-5. Confirm `review.tex` is created from the bundled template and retains `\ranswer`.
-6. Confirm `./com/orchestrator.json` contains the compatible top-level keys plus `paper_review_zyr`.
-7. Confirm a complex experiment request stops at a persisted user checkpoint.
-8. Resume the same run and confirm stable issue IDs and no duplicate answers or edits.
-9. Exercise one delegated worker when available; otherwise confirm the sequential fallback records its mode.
-10. Run `python3 <skill-root>/scripts/validate_review_state.py --com-dir ./com`.
+5. Confirm default mode preserves `paper.tex` and `review.tex`, resolves the first unused `paper_rN.tex` and `review_rN.tex`, and creates the latter from the bundled template with `\ranswer` when its source is absent.
+6. Confirm `--overwirte` resolves both outputs to their corresponding source paths; do not use this destructive-mode smoke test on valuable files.
+7. Confirm `./com/orchestrator.json` contains the compatible top-level keys plus `paper_review_zyr` and the four source/output paths.
+8. Confirm a complex experiment request stops at a persisted user checkpoint without creating a paper revision when no paper mutation occurred.
+9. Resume the same run and confirm the saved `_rN` outputs, stable issue IDs, and no duplicate answers or edits.
+10. Exercise one delegated worker when available; otherwise confirm the sequential fallback records its mode.
+11. Run `python3 <skill-root>/scripts/validate_review_state.py --com-dir ./com`.
 
 If a client is unavailable, perform a structural substitute test using its documented discovery layout and clearly report that live invocation remains unverified. Do not claim a live three-client smoke test from static file checks alone.
 

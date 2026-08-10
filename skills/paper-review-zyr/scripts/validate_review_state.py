@@ -190,7 +190,10 @@ class Validator:
     def validate_parameters(self, params: dict[str, Any]) -> None:
         required_types = {
             "source_tex": str,
+            "output_tex": str,
             "review_tex": str,
+            "output_review_tex": str,
+            "overwirte": bool,
             "raw_reviews": list,
             "writing_style_file": str,
             "phase": str,
@@ -240,6 +243,49 @@ class Validator:
                     all(isinstance(item, str) for item in value),
                     f"orchestrator.json.parameters.{key}",
                     "must contain only strings",
+                )
+        source_output_pairs = (
+            ("source_tex", "output_tex"),
+            ("review_tex", "output_review_tex"),
+        )
+        for source_key, output_key in source_output_pairs:
+            source = params.get(source_key)
+            output = params.get(output_key)
+            if not isinstance(source, str) or not isinstance(output, str):
+                continue
+            source_path = Path(source)
+            output_path = Path(output)
+            self.expect(
+                source_path.suffix.lower() == ".tex",
+                f"orchestrator.json.parameters.{source_key}",
+                "must be a .tex path",
+            )
+            self.expect(
+                output_path.suffix.lower() == ".tex",
+                f"orchestrator.json.parameters.{output_key}",
+                "must be a .tex path",
+            )
+            if params.get("overwirte") is True:
+                self.expect(
+                    source_path == output_path,
+                    f"orchestrator.json.parameters.{output_key}",
+                    f"must equal {source_key} when overwirte is true",
+                )
+            elif params.get("overwirte") is False:
+                self.expect(
+                    source_path != output_path,
+                    f"orchestrator.json.parameters.{output_key}",
+                    f"must differ from {source_key} when overwirte is false",
+                )
+                self.expect(
+                    source_path.parent == output_path.parent,
+                    f"orchestrator.json.parameters.{output_key}",
+                    "must be a sibling of its source",
+                )
+                self.expect(
+                    re.search(r"(?:_r[1-9][0-9]*)+\.tex$", output_path.name) is not None,
+                    f"orchestrator.json.parameters.{output_key}",
+                    "must end in a positive `_rN.tex` revision suffix",
                 )
         if params.get("phase") == "revise":
             self.expect(
@@ -697,6 +743,47 @@ class Validator:
 
         params = orchestrator.get("parameters") if isinstance(orchestrator, dict) else None
         documents = compile_obj.get("documents") if isinstance(compile_obj, dict) else None
+        if isinstance(params, dict):
+            output_tex = params.get("output_tex")
+            output_review_tex = params.get("output_review_tex")
+            if isinstance(draft_obj, dict) and draft_obj:
+                self.expect(
+                    draft_obj.get("review_path") == output_review_tex,
+                    "reviewDraft.json.review_path",
+                    "must equal orchestrator output_review_tex",
+                )
+            if isinstance(edits, list):
+                for index, edit in enumerate(edits):
+                    if isinstance(edit, dict):
+                        self.expect(
+                            edit.get("file") == output_tex,
+                            f"paperEdits.json.edits[{index}].file",
+                            "must equal orchestrator output_tex",
+                        )
+            specs = edits_obj.get("specs") if isinstance(edits_obj, dict) else None
+            if isinstance(specs, list):
+                for index, spec in enumerate(specs):
+                    if isinstance(spec, dict):
+                        self.expect(
+                            spec.get("file") == output_tex,
+                            f"paperEdits.json.specs[{index}].file",
+                            "must equal orchestrator output_tex",
+                        )
+            if isinstance(documents, list):
+                expected_outputs = {
+                    "paper": output_tex,
+                    "review": output_review_tex,
+                }
+                for index, document in enumerate(documents):
+                    if not isinstance(document, dict):
+                        continue
+                    kind = document.get("kind")
+                    if kind in expected_outputs:
+                        self.expect(
+                            document.get("source_tex") == expected_outputs[kind],
+                            f"compileResults.json.documents[{index}].source_tex",
+                            f"must equal the resolved {kind} output path",
+                        )
         if isinstance(params, dict) and isinstance(documents, list):
             statuses = [doc.get("status") for doc in documents if isinstance(doc, dict)]
             if params.get("no_compile") is True:
