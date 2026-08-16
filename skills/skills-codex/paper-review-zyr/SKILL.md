@@ -3,7 +3,7 @@ name: paper-review-zyr
 description: Draft a LaTeX response or cover letter from one or more manuscript reviews, preserve reviewer wording, write grounded point-by-point replies in the author's style, revise the paper with reversible ORI/MO annotations, process embedded $SPEC instructions, resume across calls, and compile both documents. Use when responding to peer review, preparing a revision letter, applying reviewer-requested manuscript changes, or revising an existing response letter.
 ---
 
-# Paper Review ZYR
+# Paper Review ZYR for Codex
 
 Turn reviewer reports into a traceable response letter and a reversibly annotated manuscript revision. Treat the directory containing this `SKILL.md` as `SKILL_ROOT`; resolve every bundled reference, script, `template.tex`, and `letterbib.sty` relative to it.
 
@@ -22,7 +22,7 @@ Use `scripts/validate_review_state.py` after initialization and every file-based
 Treat the text following an explicit skill invocation, or the current user request when invoked implicitly, as arguments. Accept `--key value`, `--key: value`, and `— key: value` forms.
 
 ```text
-/paper-review-zyr path/to/paper.tex \
+$paper-review-zyr path/to/paper.tex \
   --review path/to/review.tex \
   --reviews path/to/reviewer1.txt,path/to/reviewer2.pdf \
   --style-materials path/to/materials \
@@ -86,7 +86,7 @@ Report material conflicts instead of silently choosing. Report every unmatched `
 - Never remove original manuscript content from the source representation. Use the exact annotation forms in `references/response-rules.md`.
 - Preserve the source `PAPER` and `REVIEW` files unless the exact `--overwrite` flag is present. In default mode, never direct any mutation or compile repair to a source path.
 - Make every stage idempotent. Re-running a completed compatible stage must not duplicate an issue, answer, edit, annotation, template section, or compilation record.
-- Keep the canonical skill portable. Describe delegation by role/input/output contract, not by a product-specific tool name.
+- Keep behavior aligned with the canonical skill. Limit Codex-specific changes to invocation, collaboration, and presentation metadata.
 - Keep all coordination in workspace-local `./com`; do not place state in the installed skill directory.
 - Preserve invalid or incompatible state and stop with an actionable diagnostic; never guess or replace it wholesale.
 - Pass raw artifact paths and role contracts to delegated workers. Do not bias them with the orchestrator's subjective summary.
@@ -115,9 +115,11 @@ python3 SKILL_ROOT/scripts/validate_review_state.py --com-dir ./com
 
 Use `--final` only for the Stage 8 coverage audit. If validation fails, leave the failing artifact intact, record the diagnostic, set the run to `error` or a pending checkpoint as appropriate, and stop.
 
-## Delegate bounded roles
+## Delegate bounded roles with Codex
 
-Use the host's native delegation mechanism when available. If delegation is unavailable or denied, perform the same role sequentially in the orchestrator and record `execution_mode` as `sequential` or `mixed`. Preserve every input/output restriction either way.
+When active instructions permit collaboration, dispatch each role as a bounded Codex task with `spawn_agent`. Give the worker only its role contract, absolute raw-artifact paths, required reference paths, and allowed outputs; do not pass the orchestrator's subjective conclusions. Use `followup_task` to resume an idle worker and `send_message` only to communicate with a worker that is already running. Wait for the worker to finish, validate its file handoff, and advance the stage before dispatching a role that writes any of the same state files. The primary agent remains responsible for path resolution, stage gates, validation, user checkpoints, and the final audit.
+
+If collaboration is unavailable, denied, or constrained by slot limits, execute the same role sequentially in the primary agent and record `execution_mode` as `sequential` or `mixed`. Preserve every input/output restriction either way. Never parallelize workers that can write the same coordination artifact.
 
 ### Writing-style analyst
 

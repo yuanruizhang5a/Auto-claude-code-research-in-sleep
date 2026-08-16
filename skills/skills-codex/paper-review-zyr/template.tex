@@ -1,0 +1,263 @@
+\documentclass[a4paper,10pt]{letter}
+\usepackage[utf8]{inputenc}
+\PassOptionsToPackage{hyphens}{url}\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{a4wide}
+\usepackage{xcolor}
+\usepackage{colortbl,multirow,hhline}
+\usepackage{tcolorbox}
+\usepackage{letterbib}
+\usepackage{footnote}
+\usepackage{float}
+\usepackage{url}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{supertabular}
+\usepackage{caption}
+\usepackage{newfloat}
+\usepackage[percent]{overpic}
+\usepackage{xspace}
+\usepackage{newfloat}
+\usepackage{tikz}
+\usetikzlibrary{arrows}
+\usetikzlibrary{shapes}
+\usepackage{nicefrac}
+
+\DeclareFloatingEnvironment[fileext=lot]{table}
+
+% Macros for proof-reading
+\usepackage[normalem]{ulem} % for \sout
+\usepackage{xcolor}
+%\newcommand{\ra}{$\rightarrow$}
+\newcommand{\parameter}[1]{\textit{#1}}
+\newcommand{\parameterValue}[1]{\textit{#1}}
+%\newcommand{\ugh}[1]{\textcolor{red}{\uwave{#1}}} % please rephrase
+\newcommand{\ir}[1]{\textcolor{black}{#1}} % please insert
+%\newcommand{\del}[1]{\textcolor{red}{\sout{#1}}} % please delete
+%\newcommand{\chg}[2]{\textcolor{red}{\sout{#1}}{\ra}\textcolor{blue}{\uline{#2}}} % please change
+
+% Put edit comments in a really ugly standout display
+\usepackage{ifthen}
+\usepackage{amssymb}
+\newboolean{showcomments}
+\setboolean{showcomments}{true} % toggle to show or hide comments
+\ifthenelse{\boolean{showcomments}}
+  {\newcommand{\nb}[2]{
+    \fcolorbox{gray}{yellow}{\bfseries\sffamily\scriptsize#1}
+    {\sf\small$\blacktriangleright$\textit{#2}$\blacktriangleleft$}
+   }
+   \newcommand{\version}{\emph{\scriptsize$-$working$-$}}
+  }
+  {\newcommand{\nb}[2]{}
+   \newcommand{\version}{}
+  }
+\newcommand{\review}[1]{\hrulefill\par{\Large\textbf{Reviewer #1}}}
+\newcommand{\editor}[1]{\hrulefill\par{\Large\textbf{#1}}}
+
+\newcommand{\rcomment}[2]{\textbf{#1} ``#2\xspace''}
+\newcommand{\ranswer}[1]{{\color{blue}\textnormal{\textbf{Re:}} #1}}
+\newcommand{\raddress}[1]{{\noindent \setlength{\parskip}{0.1em} \linespread{0.25} #1}}
+
+\newcommand\iq[1]{\textit{``#1''}}
+\newcommand\pl[1]{~(\href{#1}{#1})}
+\newcommand\code[1]{\textnormal{\texttt{#1}}}
+
+\newcolumntype{P}[1]{>{\centering\arraybackslash}m{#1}}
+
+\usepackage[switch]{lineno}
+% \linenumbers
+\renewcommand{\linenumberfont}{\ttfamily\bfseries\scriptsize\color{red}}
+
+% new commands
+\definecolor{gray50}{gray}{.5}
+\definecolor{gray40}{gray}{.6}
+\definecolor{gray30}{gray}{.7}
+\definecolor{gray20}{gray}{.8}
+\definecolor{gray10}{gray}{.9}
+\definecolor{gray05}{gray}{.95}
+
+\definecolor{green10}{RGB}{204, 255, 204}
+\definecolor{red10}{RGB}{255, 204, 204}
+
+\newcommand\added[1]{\textcolor{black}{#1}}
+
+\newcommand\todo[1]{\nb{Todo}{#1}}
+\newcommand\assignedTo[1]{\nb{Assigned to: }{#1}}
+% end Macros for proof-reading
+
+\newcommand*\circled[1]{\tikz[baseline=(char.base)]{
+            \node[shape=circle,draw,inner sep=1pt] (char) {#1};}}
+
+\newcommand{\ie}{\emph{i.e.,}\xspace}
+\newcommand{\eg}{\emph{e.g.,}\xspace}
+\newcommand{\etc}{etc.\xspace}
+\newcommand{\etal}{\emph{et~al.}\xspace}
+
+\signature{
+Yuanrui Zhang
+}
+
+\newcommand{\ugh}[1]{\textcolor{red}{\uwave{#1}}} % please rephrase
+\newcommand{\ins}[1]{\textcolor{blue}{#1}} % please insert
+\newcommand{\del}[1]{\textcolor{red}{\sout{#1}}} % please delete
+\newcommand{\chg}[2]{\textcolor{red}{\sout{#1}}{$\rightarrow$}\textcolor{blue}{\uline{#2}}} % please change
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% zyr's definition
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\fred}[0]{\color{red}}
+\newcommand{\bff}[1]{\mathbf{#1}}
+\newcommand{\mbb}[1]{\mathbb{#1}}
+\newcommand{\mcl}[1]{\mathcal{#1}}
+\newcommand{\spc}[1]{\begin{spacing}{#1}}
+\newcommand{\spce}{\end{spacing}}
+\newcommand{\la}[0]{\langle}
+\newcommand{\ra}[0]{\rangle}
+\newcommand{\mfr}[1]{\mathfrak{#1}}
+
+\newcommand{\refer}[1]{{\color{red}#1}}
+
+%something user's definitions here
+%...
+
+%tikz timing table
+\usepackage{tikz-timing}
+\usepackage{graphicx}
+\usepackage{tikz}
+
+\usepackage{mathtools} %for arrows like ``\xRightarrow''
+\usepackage{proof} %package for \infer
+
+\begin{document}
+
+\begin{letter}{Theoretical Computer Science\\
+    Editorial board}
+
+\opening{Dear Editors and Reviewers,}
+
+[An example: ]
+
+We sincerely appreciate your hard work on reviewing this manuscript! Especially, we want to thank the 2nd reviewer. Thank him/her for his/her careful reviewing of the technical details of this manuscript, and for his/her insightful observations and suggestions that help improve this work.
+
+In this revision, we primarily focused on correcting the issues by both of the reviewers since last time.
+We fixed all the problems and adopted most of the suggestions from the 2nd reviewer, while we gave a ``compromise solution'' to the main issue proposed by the 1st reviewer.
+We will explain below in detail why it is difficult in this current paper to fulfill some of the requests from both reviewers.
+
+
+Below we list the feedback from you and give a reply to each of the problems you have.
+Each reply begins with ``\textbf{Re:}'' in {\ins{blue}} to distinguish it from your statements.
+
+%For the final version, we made minor grammatical corrections and revised a few sentences from the previous version.
+
+If you have any questions, please do not hesitate to contact us.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Editor
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\editor{Decision Letter}
+
+Dear Lecturer Yuanrui Zhang,
+
+Referees have evaluated your paper mentioned above. Comments are below. On the basis of these comments, the member of the Editorial Board handling your paper has decided that a minor revision is needed before your paper can be accepted. I would appreciate it if you could revise your paper within one month of this email.
+
+I look forward to receiving the revised version of your paper. You should explain how and where the reviewers' comments have been addressed by your changes to the text (overview of changes). Should you disagree with some of these comments, please explain why.
+
+
+(The rest content from the editor is omitted here.)
+
+\vspace{1cm}
+
+Kind regards,
+\\
+
+Katie Harris
+
+Managing Editor
+
+Theoretical Computer Science
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Editor
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\editor{Editor}
+
+
+
+\editor{Handling Editor}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% REVIEWER 1
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\review{1}
+
+Some contents by the reviewer.
+
+Content 1 : some content is here.
+
+\ranswer{
+    My answer to content 1. Please be politely in your words.
+}
+
+Content 2 : some content is here.
+
+\ranswer{
+    My answer to content 2. Please be politely in your words.
+}
+
+...
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\review{2}
+
+Some contents by the reviewer.
+
+Content 1 : some content is here.
+
+\ranswer{
+    My answer to content 1. Please be politely in your words.
+}
+
+Content 2 : some content is here.
+
+\ranswer{
+    My answer to content 2. Please be politely in your words.
+}
+
+...
+
+\review{3}
+
+...
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\hrulefill
+\vspace{.4in}
+%\vfill
+
+\closing{Best regards,}
+
+\bibliographystyle{plain}
+%\bibliography{bibliography}
+
+\raddress{
+
+Email: zhangyrmath@126.com/yuanruizhang@nuaa.edu.cn
+
+Collage of Software
+
+Nanjing University of Aeronautics and Astronautics, Nanjing, China
+}
+
+
+\end{letter}
+
+\end{document}
