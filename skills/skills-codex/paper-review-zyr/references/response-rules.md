@@ -234,6 +234,7 @@ Recognize keyword types prefixed with `@`; allow multi-word DIY types in bracket
 | `@mini` | Make the smallest justified edit while satisfying other active types. |
 | `@inst` | Follow the explicit instruction exactly unless it conflicts with safety, evidence, or a higher-priority spec. |
 | `@word` | Polish or reword only as needed. |
+| `@grammar` | Check grammar, spelling, capitalization, and punctuation. When no other active type authorizes broader changes, leave an error-free block completely unchanged; otherwise correct only the minimum necessary tokens or marks while preserving meaning, terminology, sentence structure, and phrasing. Do not paraphrase, reword, or style-polish under `@grammar` alone. |
 | `@rewrite` | Rewrite to fit local context while preserving intended meaning and research idea. |
 | `@improve` | Make the text formal and paper-quality without changing the research idea. |
 | `@expand` | Add only context-grounded explanation, intuition, or connective detail that materially helps. Do not pad or introduce new ideas. |
@@ -247,6 +248,8 @@ Apply combination rules:
 
 - `$SPEC` has highest priority over current-call instructions, reviewer changes, style, and general polishing.
 - Apply `@inst` as binding, then apply `@check` to ensure the result remains supported.
+- Treat `@grammar` alone as a grammar-and-mechanics check, not a rewriting instruction. Leave the entire block unchanged and record `disposition: unchanged` when it has no grammar, spelling, capitalization, or punctuation problem. When a problem exists, change only what is required to correct it and preserve all unaffected wording and structure.
+- When another active type explicitly authorizes broader transformation, apply that type normally and then use `@grammar` to check the resulting text; `@grammar` does not restrict the companion type's authorized behavior.
 - Apply `@mini` to minimize the result after satisfying other active types.
 - Apply `@keep` last: preserve original block content and append the generated version.
 - Use `@expand` only when justified detail exists; otherwise leave the content unchanged.

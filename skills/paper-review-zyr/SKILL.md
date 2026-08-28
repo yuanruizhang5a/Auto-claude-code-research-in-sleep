@@ -230,7 +230,7 @@ Leave ambiguous or out-of-scope targets pending and ask the user. Avoid unrelate
 
 ### Stage 6: process `$SPEC`
 
-If `OUTPUT_PAPER` does not yet exist and an in-scope `$SPEC` will change the manuscript, copy `SOURCE_PAPER` to the still-unused output first. Parse and modify only `OUTPUT_PAPER`; use `SOURCE_PAPER` for the unchanged baseline. Parse all in-scope `!++ ... ++!` blocks according to `references/response-rules.md`, including nesting, ignored/commented regions, type combinations, conservative `@check`, `@keep`, `@mini`, unresolved `\VE...\EVE`, and source-preserving ORI/MO output.
+If `OUTPUT_PAPER` does not yet exist and an in-scope `$SPEC` will change the manuscript, copy `SOURCE_PAPER` to the still-unused output first. Parse and modify only `OUTPUT_PAPER`; use `SOURCE_PAPER` for the unchanged baseline. Parse all in-scope `!++ ... ++!` blocks according to `references/response-rules.md`, including nesting, ignored/commented regions, type combinations, standalone grammar-and-mechanics `@grammar`, conservative `@check`, `@keep`, `@mini`, unresolved `\VE...\EVE`, and source-preserving ORI/MO output.
 
 Apply `$SPEC` before lower-priority reviewer changes at the same location. Detect and report conflicts with reviewer requests or saved user decisions. Do not silently choose across a material conflict.
 
